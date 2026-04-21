@@ -1,36 +1,187 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Competence Model Dashboard</title>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="assets/styles/app.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURES Competence Model</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@0.344.0"></script>
+
+    <!-- Firebase v10 SDKs (compat mode — global firebase object) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+    <!-- Chart.js for statistics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/styles/app.css">
 </head>
-<body>
-  <header class="app-header">
-    <h1>Competence Model</h1>
-    <p class="subtitle">Crosscheck výsledků z Datacruit API proti modelu konzultantů</p>
-  </header>
 
-  <main id="app">
-    <section id="status" class="panel">
-      <h2>Stav</h2>
-      <p id="last-updated">Načítání…</p>
-    </section>
+<body class="flex flex-col h-screen">
 
-    <section id="results" class="panel">
-      <h2>Výsledky kompetenčního modelu</h2>
-      <div id="results-container"></div>
-    </section>
+    <!-- Login Overlay -->
+    <div id="loginOverlay" style="display: none;">
+        <div class="login-card">
+            <div class="upload-icon-wrap">
+                <i data-lucide="lock"></i>
+            </div>
+            <h2 class="upload-title">AURES Competence Model</h2>
+            <p class="upload-desc">Přihlaste se pracovním e-mailem a heslem. Přístup mají jen účty, které byly předem zřízené správcem.</p>
+            <input type="email" id="loginEmail" class="login-input" placeholder="jmeno.prijmeni@aures..."
+                   onkeydown="if(event.key === 'Enter') document.getElementById('loginPassword').focus()">
+            <input type="password" id="loginPassword" class="login-input" placeholder="Vaše heslo (min. 6 znaků)"
+                   onkeydown="if(event.key === 'Enter') handleLogin()">
+            <button id="loginBtn" onclick="handleLogin()" class="btn-primary-upload">Přihlásit se</button>
+            <p class="login-help">Účet i heslo jsou přidělené správcem. Pokud je nemáte, web vás sám nezaregistruje.</p>
+            <p id="loginError" class="login-error"></p>
+        </div>
+    </div>
 
-    <section id="crosscheck" class="panel">
-      <h2>Crosscheck s modelem konzultantů</h2>
-      <div id="crosscheck-container"></div>
-    </section>
-  </main>
+    <!-- Header -->
+    <header class="app-header">
+        <div class="logo-wrap" onclick="goHome()" role="button" tabindex="0"
+             onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); goHome(); }">
+            <div class="logo-mark">
+                <div class="logo-mark-bg"></div>
+                <span class="logo-mark-inner">A</span>
+            </div>
+            <div class="logo-text">
+                <div class="logo-title">AURES <span>Competence Model</span></div>
+                <div id="lastUpdatedText" class="last-updated">Poslední sync: načítání…</div>
+                <div id="firebaseStatus" class="firebase-status loading" title="Firebase: načítání">
+                    <span class="firebase-status-dot" aria-hidden="true"></span>
+                    <span id="firebaseStatusLabel">Firebase: načítání</span>
+                </div>
+            </div>
+        </div>
 
-  <script src="assets/js/core.js"></script>
-  <script src="assets/js/dashboard.js"></script>
+        <div class="header-actions">
+            <!-- Country switcher CZ / SK / PL / All -->
+            <div id="countryNav" class="country-nav">
+                <button id="nav-btn-CZ" onclick="setGlobalCountry('CZ')" class="country-btn">CZ</button>
+                <button id="nav-btn-SK" onclick="setGlobalCountry('SK')" class="country-btn">SK</button>
+                <button id="nav-btn-PL" onclick="setGlobalCountry('PL')" class="country-btn">PL</button>
+                <button id="nav-btn-ALL" onclick="setGlobalCountry('ALL')" class="country-btn">All</button>
+            </div>
+
+            <!-- Global search -->
+            <div class="search-wrap">
+                <i data-lucide="search" class="search-icon"></i>
+                <input type="text" id="globalSearch" placeholder="Hledat kandidáta, manažera, pobočku…"
+                       class="search-input" oninput="handleSearch(this.value)">
+            </div>
+
+            <button onclick="showDashboardView()" id="dashboardBtn" class="btn-upload hidden">
+                <i data-lucide="layout-grid" class="w-4 h-4"></i> <span>Dashboard</span>
+            </button>
+            <button onclick="showStatsView()" id="statsBtn" class="btn-upload hidden">
+                <i data-lucide="bar-chart-3" class="w-4 h-4"></i> <span>Statistiky</span>
+            </button>
+            <button onclick="toggleTheme()" id="themeToggle" class="btn-icon theme-toggle" aria-label="Přepnout tmavý režim">
+                <i data-lucide="moon" class="w-4 h-4"></i>
+                <span class="theme-toggle-label">Dark</span>
+            </button>
+            <button onclick="handleLogout()" id="logoutBtn" class="btn-upload hidden">
+                <i data-lucide="log-out" class="w-4 h-4"></i> <span>Odhlásit</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="app-main">
+        <!-- Loading overlay -->
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loader"></div>
+            <h2 id="loadingTitle">Načítání dat z Firebase…</h2>
+            <p id="loadingDescription">Získáváme kompetenční modely z cloudu</p>
+        </div>
+
+        <!-- Dashboard view -->
+        <div id="dashboardView" class="view-container hidden">
+            <div class="view-inner">
+                <!-- KPI row -->
+                <div class="kpi-grid" id="kpiGrid">
+                    <!-- KPI cards rendered by stats/dashboard module -->
+                </div>
+
+                <!-- Filter bar -->
+                <div class="filter-bar" id="filterBar">
+                    <div class="filter-group">
+                        <label>Pozice</label>
+                        <select id="filterForm" onchange="handleFilterChange()">
+                            <option value="ALL">Vše</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Katalog</label>
+                        <select id="filterCatalog" onchange="handleFilterChange()">
+                            <option value="ALL">Vše</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Pobočka</label>
+                        <select id="filterBranch" onchange="handleFilterChange()">
+                            <option value="ALL">Vše</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Manažer</label>
+                        <select id="filterManager" onchange="handleFilterChange()">
+                            <option value="ALL">Vše</option>
+                        </select>
+                    </div>
+                    <div class="filter-group" id="filterCountryGroup" style="display: none;">
+                        <label>Země</label>
+                        <select id="filterCountry" onchange="handleFilterChange()">
+                            <option value="ALL">Vše</option>
+                            <option value="Czech Republic">Czech Republic</option>
+                            <option value="Slovakia">Slovakia</option>
+                            <option value="Poland">Poland</option>
+                        </select>
+                    </div>
+                    <div class="filter-group filter-hr-only">
+                        <label>HR hodnocení</label>
+                        <select id="filterHrStatus" onchange="handleFilterChange()">
+                            <option value="ALL">Vše</option>
+                            <option value="WITH">Vyplněno</option>
+                            <option value="WITHOUT">Nevyplněno</option>
+                        </select>
+                    </div>
+                    <button class="filter-reset-btn" onclick="resetFilters()" title="Resetovat filtry">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset
+                    </button>
+                </div>
+
+                <!-- Candidates table -->
+                <div id="candidatesContainer"></div>
+            </div>
+        </div>
+
+        <!-- Stats view -->
+        <div id="statsView" class="view-container hidden">
+            <div class="view-inner">
+                <div id="statsContent"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast -->
+    <div id="toast" class="toast" style="display:none;"></div>
+
+    <!-- JS modules (order matters) -->
+    <script src="assets/js/core.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/dashboard.js"></script>
+    <script src="assets/js/stats.js"></script>
+    <script>
+        // Re-initialize Lucide icons whenever content changes.
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.lucide) lucide.createIcons();
+        });
+    </script>
 </body>
 </html>
