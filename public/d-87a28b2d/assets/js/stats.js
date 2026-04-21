@@ -21,13 +21,48 @@ function renderStats() {
 
     host.innerHTML = renderStatsLayout();
     renderStatsKpis(records);
-    renderVisualOverview(records);
-    renderQualityBars(records);
+
+    // 1. Kvalita kandidátů
+    renderByFormBar(records);
+    renderHistogram(records);
+    renderFormStatsTable(records);
+    renderPercentileKpis(records);
+
+    // 2. Žebříčky
+    renderHorizontalBarTop10("chartByCity",
+        groupAvg(records, "client_branch_name", 3).sort((a, b) => b.avg - a.avg).slice(0, 10),
+        "#10b981", { suggestedMax: 70 });
+    renderHorizontalBarTop10("chartByCatalog",
+        groupAvg(records, "catalog_position", 3).sort((a, b) => b.avg - a.avg).slice(0, 10),
+        "#8b5cf6", { suggestedMax: 70 });
+
+    // 3. Manažeři
+    const managerAvgs = groupAvg(records, "manager_name", 5);
+    renderHorizontalBarTop10("chartStrictManagers",
+        managerAvgs.slice().sort((a, b) => a.avg - b.avg).slice(0, 10),
+        "#ef4444", { suggestedMax: 70 });
+    renderHorizontalBarTop10("chartLenientManagers",
+        managerAvgs.slice().sort((a, b) => b.avg - a.avg).slice(0, 10),
+        "#f59e0b", { suggestedMax: 70 });
+    renderCountBarChart("chartMostActiveManagers", groupCount(records, "manager_name", 10), "#3b82f6");
+    renderCountBarChart("chartMostActivePositions", groupCount(records, "catalog_position", 10), "#8b5cf6");
+    renderManagerVarianceTable(records);
+
+    // 4. Kompetence
     renderCompetenceCharts(records);
-    renderDistributionAndTrend(records);
+
+    // 5. Vývoj v čase
+    renderTimeTrend(records);
+    renderActivityOverTime(records);
+
+    // 6. TOP/BOTTOM
     renderTopBottomTables(records);
+
+    // 7. Srovnání zemí (jen All)
     if (State.globalCountry === "ALL") renderCountryCompare();
-    renderSupplementary(records);
+
+    // 8./9. Vizuální přehled (radar + scatter)
+    renderVisualOverview(records);
 
     if (window.lucide) lucide.createIcons();
 }
@@ -35,56 +70,51 @@ function renderStats() {
 // ── Layout template ──────────────────────────────
 function renderStatsLayout() {
     const countryCompareSection = State.globalCountry === "ALL" ? `
-        <div class="stats-section-title"><span>Srovnání zemí</span></div>
-        <div class="stats-grid-2">
-            <div class="stats-card card-tall">
-                <h4>Srovnání kvality kandidátů mezi zeměmi</h4>
-                <div class="stats-sub">Průměrné skóre a počet hodnocení v CZ / SK / PL</div>
-                <canvas id="chartCountry" class="stats-chart-canvas"></canvas>
+        <div class="stats-section">
+            <div class="stats-section-title"><span>8. Srovnání zemí</span></div>
+            <div class="stats-grid-2">
+                <div class="stats-card card-tall" style="grid-column: 1 / -1;">
+                    <h4>Jak se liší kvalita kandidátů mezi CZ / SK / PL</h4>
+                    <div class="stats-sub">Průměrné skóre (modrá) a počet hodnocení (šedá) v jednotlivých zemích</div>
+                    <canvas id="chartCountry" class="stats-chart-canvas"></canvas>
+                </div>
             </div>
         </div>` : "";
 
     return `
         <div class="kpi-grid" id="statsKpiGrid"></div>
 
+        <!-- 1. KVALITA KANDIDÁTŮ (základní srovnání) -->
         <div class="stats-section">
-            <div class="stats-section-title"><span>Vizuální přehled</span></div>
-            <div class="stats-grid-2">
-                <div class="stats-card card-xtall" style="grid-column: 1 / -1;">
-                    <h4>Profil kompetencí podle oddělení</h4>
-                    <div class="stats-sub">Radar ukazuje sílu každé kompetence na stupnici 0–10. Barevná síť = jedno oddělení. Čím větší „paukování" na některé ose, tím lépe oddělení tu kompetenci zvládá.</div>
-                    <canvas id="chartRadar" class="stats-chart-canvas"></canvas>
-                </div>
-                <div class="stats-card card-xtall" style="grid-column: 1 / -1;">
-                    <h4>Všichni kandidáti v čase</h4>
-                    <div class="stats-sub">Každá tečka = jeden kandidát. Osa X: datum hodnocení, osa Y: celkové skóre, barva: oddělení. Zvýrazňuje outliery (velmi silné / velmi slabé kandidáty) a vývoj kvality v čase.</div>
-                    <canvas id="chartScatter" class="stats-chart-canvas"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="stats-section">
-            <div class="stats-section-title"><span>Kvalita kandidátů podle kategorie</span></div>
+            <div class="stats-section-title"><span>1. Kvalita kandidátů podle kategorie</span></div>
             <div class="stats-grid-2">
                 <div class="stats-card">
                     <h4>Které oddělení má nejkvalitnější kandidáty?</h4>
-                    <div class="stats-sub">Průměrné skóre podle oddělení (Salesman, FnI, Call Centre, Test Driver, General)</div>
+                    <div class="stats-sub">Průměrné skóre podle oddělení</div>
                     <canvas id="chartByForm" class="stats-chart-canvas"></canvas>
                 </div>
+                <div class="stats-card">
+                    <h4>Kolik kandidátů je v jakém bodovém pásmu</h4>
+                    <div class="stats-sub">Histogram celkových skóre (po 10 bodech)</div>
+                    <canvas id="chartHistogram" class="stats-chart-canvas"></canvas>
+                </div>
+                <div class="stats-card" style="grid-column: 1 / -1;">
+                    <h4>Rozpětí skóre podle oddělení</h4>
+                    <div class="stats-sub">Minimum / 25. percentil / medián / 75. percentil / maximum / průměr</div>
+                    <div id="formStatsTable"></div>
+                </div>
+            </div>
+            <div class="kpi-grid" id="supplementaryKpiStrip" style="margin-top:14px;"></div>
+        </div>
+
+        <!-- 2. KDE JSOU NEJLEPŠÍ KANDIDÁTI (žebříčky TOP 10) -->
+        <div class="stats-section">
+            <div class="stats-section-title"><span>2. Žebříčky: kde najdeme nejlepší kandidáty?</span></div>
+            <div class="stats-grid-2">
                 <div class="stats-card card-tall">
                     <h4>Ve kterém městě máme nejlepší kandidáty?</h4>
                     <div class="stats-sub">TOP 10 měst podle průměrného skóre (min. 3 hodnocení)</div>
                     <canvas id="chartByCity" class="stats-chart-canvas"></canvas>
-                </div>
-                <div class="stats-card card-tall">
-                    <h4>Manažeři, kteří hodnotí nejpřísněji</h4>
-                    <div class="stats-sub">Nejnižší průměrné skóre u jejich kandidátů (min. 5 hodnocení)</div>
-                    <canvas id="chartStrictManagers" class="stats-chart-canvas"></canvas>
-                </div>
-                <div class="stats-card card-tall">
-                    <h4>Manažeři, kteří hodnotí nejshovívavěji</h4>
-                    <div class="stats-sub">Nejvyšší průměrné skóre u jejich kandidátů (min. 5 hodnocení)</div>
-                    <canvas id="chartLenientManagers" class="stats-chart-canvas"></canvas>
                 </div>
                 <div class="stats-card card-tall">
                     <h4>Které pozice mají nejvyšší průměrné skóre?</h4>
@@ -94,67 +124,20 @@ function renderStatsLayout() {
             </div>
         </div>
 
+        <!-- 3. MANAŽEŘI: KDO JAK HODNOTÍ -->
         <div class="stats-section">
-            <div class="stats-section-title"><span>Kvalita kompetencí</span></div>
+            <div class="stats-section-title"><span>3. Manažeři: kdo jak hodnotí</span></div>
             <div class="stats-grid-2">
                 <div class="stats-card card-tall">
-                    <h4>Nejsilnější a nejslabší kompetence u našich kandidátů</h4>
-                    <div class="stats-sub">Průměrné body u každé kompetence (napříč odděleními)</div>
-                    <canvas id="chartCompetenceAvg" class="stats-chart-canvas"></canvas>
+                    <h4>Kdo hodnotí nejpřísněji</h4>
+                    <div class="stats-sub">Nejnižší průměrné skóre u jejich kandidátů (min. 5 hodnocení)</div>
+                    <canvas id="chartStrictManagers" class="stats-chart-canvas"></canvas>
                 </div>
                 <div class="stats-card card-tall">
-                    <h4>Rozložení bodů u jednotlivých kompetencí</h4>
-                    <div class="stats-sub">Kolikrát kompetence dostala jakou známku (1–10)</div>
-                    <canvas id="chartCompetenceDist" class="stats-chart-canvas"></canvas>
+                    <h4>Kdo hodnotí nejshovívavěji</h4>
+                    <div class="stats-sub">Nejvyšší průměrné skóre u jejich kandidátů (min. 5 hodnocení)</div>
+                    <canvas id="chartLenientManagers" class="stats-chart-canvas"></canvas>
                 </div>
-                <div class="stats-card card-tall" style="grid-column: 1 / -1;">
-                    <h4>Síla kompetencí podle oddělení</h4>
-                    <div class="stats-sub">Heatmapa: průměrné body u každé kompetence v každém oddělení (zelená = vysoké, červená = nízké)</div>
-                    <div id="competenceHeatmap" class="competence-heatmap"></div>
-                </div>
-            </div>
-        </div>
-
-        <div class="stats-section">
-            <div class="stats-section-title"><span>Rozložení skóre a vývoj v čase</span></div>
-            <div class="stats-grid-2">
-                <div class="stats-card">
-                    <h4>Kolik kandidátů je v jakém bodovém pásmu</h4>
-                    <div class="stats-sub">Histogram celkových skóre (po 10 bodech)</div>
-                    <canvas id="chartHistogram" class="stats-chart-canvas"></canvas>
-                </div>
-                <div class="stats-card">
-                    <h4>Rozpětí skóre podle oddělení</h4>
-                    <div class="stats-sub">Minimum / 25. percentil / medián / 75. percentil / maximum / průměr</div>
-                    <div id="formStatsTable"></div>
-                </div>
-                <div class="stats-card">
-                    <h4>Jak se vyvíjí průměrné skóre v čase</h4>
-                    <div class="stats-sub">Měsíční agregace (průměr + počet hodnocení)</div>
-                    <canvas id="chartTrend" class="stats-chart-canvas"></canvas>
-                </div>
-                <div class="stats-card card-tall">
-                    <h4>Aktivita manažerů v čase</h4>
-                    <div class="stats-sub">Počet hodnocení po měsících — top 5 nejaktivnějších + zbytek</div>
-                    <canvas id="chartActivityOverTime" class="stats-chart-canvas"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="stats-section">
-            <div class="stats-section-title"><span>Nejlepší a nejhorší kandidáti</span></div>
-            <div class="stats-grid-2">
-                <div class="stats-card"><h4>Nejlepší kandidáti v aktuálním výběru</h4><div class="stats-sub">TOP 10 podle celkového skóre</div><div id="topCandidatesTable"></div></div>
-                <div class="stats-card"><h4>Kandidáti s nejnižším skóre</h4><div class="stats-sub">BOTTOM 10 podle celkového skóre</div><div id="bottomCandidatesTable"></div></div>
-            </div>
-        </div>
-
-        ${countryCompareSection}
-
-        <div class="stats-section">
-            <div class="stats-section-title"><span>Doplňující metriky</span></div>
-            <div class="kpi-grid" id="supplementaryKpiStrip"></div>
-            <div class="stats-grid-2" style="margin-top:14px;">
                 <div class="stats-card card-tall">
                     <h4>Nejaktivnější manažeři (počet hodnocení)</h4>
                     <div class="stats-sub">Kdo udělal nejvíc hodnocení v aktuálním výběru</div>
@@ -169,6 +152,73 @@ function renderStatsLayout() {
                     <h4>Variabilita hodnocení podle manažerů</h4>
                     <div class="stats-sub">Nízká odchylka = konzistentní hodnotitel; vysoká = body rozprostírá v širokém pásmu (min. 5 hodnocení)</div>
                     <div id="managerVarianceTable"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. KOMPETENCE: SILNÉ A SLABÉ -->
+        <div class="stats-section">
+            <div class="stats-section-title"><span>4. Kompetence: silné a slabé stránky kandidátů</span></div>
+            <div class="stats-grid-2">
+                <div class="stats-card card-tall">
+                    <h4>Nejsilnější a nejslabší kompetence</h4>
+                    <div class="stats-sub">Průměrné body u každé kompetence napříč odděleními</div>
+                    <canvas id="chartCompetenceAvg" class="stats-chart-canvas"></canvas>
+                </div>
+                <div class="stats-card card-tall">
+                    <h4>Rozložení bodů u jednotlivých kompetencí</h4>
+                    <div class="stats-sub">Kolikrát kompetence dostala jakou známku (1–10)</div>
+                    <canvas id="chartCompetenceDist" class="stats-chart-canvas"></canvas>
+                </div>
+                <div class="stats-card" style="grid-column: 1 / -1;">
+                    <h4>Síla kompetencí podle oddělení</h4>
+                    <div class="stats-sub">Heatmapa: průměrné body u každé kompetence v každém oddělení (zelená = vysoké, červená = nízké)</div>
+                    <div id="competenceHeatmap" class="competence-heatmap"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. VÝVOJ V ČASE -->
+        <div class="stats-section">
+            <div class="stats-section-title"><span>5. Vývoj v čase</span></div>
+            <div class="stats-grid-2">
+                <div class="stats-card">
+                    <h4>Jak se vyvíjí průměrné skóre v čase</h4>
+                    <div class="stats-sub">Měsíční agregace (průměr + počet hodnocení)</div>
+                    <canvas id="chartTrend" class="stats-chart-canvas"></canvas>
+                </div>
+                <div class="stats-card">
+                    <h4>Aktivita manažerů v čase</h4>
+                    <div class="stats-sub">Počet hodnocení po měsících — top 5 nejaktivnějších + zbytek</div>
+                    <canvas id="chartActivityOverTime" class="stats-chart-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. NEJLEPŠÍ/NEJHORŠÍ KANDIDÁTI -->
+        <div class="stats-section">
+            <div class="stats-section-title"><span>6. Nejlepší a nejhorší kandidáti</span></div>
+            <div class="stats-grid-2">
+                <div class="stats-card"><h4>Nejlepší kandidáti</h4><div class="stats-sub">TOP 10 podle celkového skóre</div><div id="topCandidatesTable"></div></div>
+                <div class="stats-card"><h4>Kandidáti s nejnižším skóre</h4><div class="stats-sub">BOTTOM 10 podle celkového skóre</div><div id="bottomCandidatesTable"></div></div>
+            </div>
+        </div>
+
+        ${countryCompareSection}
+
+        <!-- 9. VIZUÁLNÍ PŘEHLED (radar + scatter, úplně dole) -->
+        <div class="stats-section">
+            <div class="stats-section-title"><span>${State.globalCountry === "ALL" ? "9" : "8"}. Vizuální přehled</span></div>
+            <div class="stats-grid-2">
+                <div class="stats-card card-xtall" style="grid-column: 1 / -1;">
+                    <h4>Profil kompetencí podle oddělení</h4>
+                    <div class="stats-sub">Radar ukazuje sílu každé kompetence (stupnice 0–10). Barevná síť = jedno oddělení. Větší plocha směrem ven = vyšší průměr v dané kompetenci.</div>
+                    <canvas id="chartRadar" class="stats-chart-canvas"></canvas>
+                </div>
+                <div class="stats-card card-xtall" style="grid-column: 1 / -1;">
+                    <h4>Všichni kandidáti v čase</h4>
+                    <div class="stats-sub">Každá tečka = jeden kandidát. Osa X: datum hodnocení, osa Y: celkové skóre, barva: oddělení. Odhalí outliery a vývoj kvality.</div>
+                    <canvas id="chartScatter" class="stats-chart-canvas"></canvas>
                 </div>
             </div>
         </div>`;
@@ -497,43 +547,47 @@ function groupAvg(records, key, minCount = 1) {
         .map(([k, v]) => ({ key: k, avg: v.sum / v.n, count: v.n }));
 }
 
-function renderQualityBars(records) {
-    // Přehled per oddělení (vertical bar)
+function renderByFormBar(records) {
+    // Horizontal bar — 5 oddělení, krátké labely vlevo, hodnoty vpravo.
+    // Horizontal místo vertical, aby se labely nelámaly a bar chart nebyl napnutý.
     const byForm = groupAvg(records, "form_name").sort((a, b) => b.avg - a.avg);
     destroyChart("chartByForm");
-    if (byForm.length) {
-        ChartRegistry["chartByForm"] = new Chart(document.getElementById("chartByForm"), {
-            type: "bar",
-            data: {
-                labels: byForm.map(b => b.key),
-                datasets: [{
-                    label: "Průměrné skóre",
-                    data: byForm.map(b => Number(b.avg.toFixed(2))),
-                    backgroundColor: "rgba(59,130,246,0.6)",
-                    borderColor: "rgba(37,99,235,1)",
-                    borderWidth: 1,
-                    borderRadius: 6
-                }]
+    const canvas = document.getElementById("chartByForm");
+    if (!canvas || !byForm.length) return;
+    ChartRegistry["chartByForm"] = new Chart(canvas, {
+        type: "bar",
+        data: {
+            labels: byForm.map(b => b.key),
+            datasets: [{
+                label: "Průměrné skóre",
+                data: byForm.map(b => Number(b.avg.toFixed(2))),
+                backgroundColor: "rgba(59,130,246,0.6)",
+                borderColor: "rgba(37,99,235,1)",
+                borderWidth: 1,
+                borderRadius: 6
+            }]
+        },
+        options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const b = byForm[ctx.dataIndex];
+                            return `${b.avg.toFixed(2)} bodů (n=${b.count})`;
+                        }
+                    }
+                }
             },
-            options: chartOptionsVBar({ suggestedMax: 70, showCountTooltip: byForm })
-        });
-    }
-
-    renderHorizontalBarTop10("chartByCity",
-        groupAvg(records, "client_branch_name", 3).sort((a, b) => b.avg - a.avg),
-        "#10b981", { suggestedMax: 70 });
-
-    // Strict managers = lowest averages (ascending sort, slice first 10)
-    const managerAvgs = groupAvg(records, "manager_name", 5);
-    const strict = managerAvgs.slice().sort((a, b) => a.avg - b.avg).slice(0, 10);
-    renderHorizontalBarTop10("chartStrictManagers", strict, "#ef4444", { suggestedMax: 70, order: "asc" });
-
-    const lenient = managerAvgs.slice().sort((a, b) => b.avg - a.avg).slice(0, 10);
-    renderHorizontalBarTop10("chartLenientManagers", lenient, "#f59e0b", { suggestedMax: 70 });
-
-    renderHorizontalBarTop10("chartByCatalog",
-        groupAvg(records, "catalog_position", 3).sort((a, b) => b.avg - a.avg).slice(0, 10),
-        "#8b5cf6", { suggestedMax: 70 });
+            scales: {
+                x: { beginAtZero: true, suggestedMax: 70, grid: { color: "rgba(148,163,184,0.12)" }, ticks: { color: "#64748b" } },
+                y: { grid: { display: false }, ticks: { color: "#334155", font: { size: 12, weight: "600" } } }
+            }
+        }
+    });
 }
 
 function renderHorizontalBarTop10(canvasId, buckets, color, opts = {}) {
@@ -774,13 +828,7 @@ function heatmapColor(avg) {
     return `rgba(22, 163, 74, ${0.2 + (avg / 10) * 0.5})`;
 }
 
-// ── Section 3: Distribution + trend + activity ──
-function renderDistributionAndTrend(records) {
-    renderHistogram(records);
-    renderFormStatsTable(records);
-    renderTimeTrend(records);
-    renderActivityOverTime(records);
-}
+// ── Histogram + quartile table + time trend + activity (called directly) ──
 
 function renderHistogram(records) {
     const buckets = [0, 0, 0, 0, 0, 0, 0];
@@ -1044,13 +1092,7 @@ function renderCountryCompare() {
     });
 }
 
-// ── Section 6: Supplementary (KPIs + count charts + variance) ─────
-function renderSupplementary(records) {
-    renderPercentileKpis(records);
-    renderMostActiveManagers(records);
-    renderMostActivePositions(records);
-    renderManagerVarianceTable(records);
-}
+// ── Percentile KPIs + count charts + variance (called directly) ─────
 
 function renderPercentileKpis(records) {
     const host = document.getElementById("supplementaryKpiStrip");
@@ -1118,14 +1160,6 @@ function renderCountBarChart(canvasId, buckets, color) {
             }
         }
     });
-}
-
-function renderMostActiveManagers(records) {
-    renderCountBarChart("chartMostActiveManagers", groupCount(records, "manager_name", 10), "#3b82f6");
-}
-
-function renderMostActivePositions(records) {
-    renderCountBarChart("chartMostActivePositions", groupCount(records, "catalog_position", 10), "#8b5cf6");
 }
 
 function renderManagerVarianceTable(records) {
