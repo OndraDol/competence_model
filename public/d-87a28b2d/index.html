@@ -69,6 +69,9 @@
             <button onclick="showStatsView()" id="statsBtn" class="btn-upload hidden">
                 <i data-lucide="bar-chart-3" class="w-4 h-4"></i> <span>Statistiky</span>
             </button>
+            <button onclick="showComparisonView()" id="comparisonBtn" class="btn-upload hidden">
+                <i data-lucide="git-compare" class="w-4 h-4"></i> <span>Srovnání</span>
+            </button>
             <button onclick="toggleTheme()" id="themeToggle" class="btn-icon theme-toggle" aria-label="Přepnout tmavý režim">
                 <i data-lucide="moon" class="w-4 h-4"></i>
                 <span class="theme-toggle-label">Dark</span>
@@ -146,6 +149,14 @@
                 <div id="statsContent"></div>
             </div>
         </div>
+
+        <!-- Comparison view -->
+        <div id="comparisonView" class="view-container hidden">
+            <div class="view-inner">
+                <div id="comparisonControls"></div>
+                <div id="comparisonContent"></div>
+            </div>
+        </div>
     </main>
 
     <!-- Toast -->
@@ -156,6 +167,7 @@
     <script src="assets/js/core.js"></script>
     <script src="assets/js/dashboard.js"></script>
     <script src="assets/js/stats.js"></script>
+    <script src="assets/js/comparison.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             if (window.lucide) lucide.createIcons();

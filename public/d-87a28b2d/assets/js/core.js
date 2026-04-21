@@ -25,8 +25,30 @@ const State = {
     search: "",
     expandedCandidateId: null,
     currentView: "dashboard",
-    unlocked: false
+    unlocked: false,
+    comparison: {
+        dimension: null,  // form | catalog | city | country | manager
+        valueA: null,
+        valueB: null
+    }
 };
+
+// Mapping of comparison dimension keys to Datacruit record fields.
+const DIMENSION_FIELD = {
+    form:    "form_name",
+    catalog: "catalog_position",
+    city:    "client_branch_name",
+    country: "country",
+    manager: "manager_name"
+};
+const DIMENSION_LABEL = {
+    form:    "Oddělení",
+    catalog: "Pozice",
+    city:    "Pobočka",
+    country: "Země",
+    manager: "Manažer"
+};
+function getDimensionField(dim) { return DIMENSION_FIELD[dim] || null; }
 
 const TIME_PERIOD_OPTIONS = [
     { value: "ALL",  label: "Vše" },
@@ -204,7 +226,7 @@ function updateLastUpdatedBadge() {
 }
 
 function revealShell() {
-    ["dashboardBtn", "statsBtn", "lockBtn", "globalFilterBar"].forEach(id => {
+    ["dashboardBtn", "statsBtn", "comparisonBtn", "lockBtn", "globalFilterBar"].forEach(id => {
         const b = document.getElementById(id);
         if (b) b.classList.remove("hidden");
     });
@@ -215,8 +237,9 @@ function lockDashboard() {
     State.results = {};
     State.meta = null;
     State.unlocked = false;
+    State.comparison = { dimension: null, valueA: null, valueB: null };
     showPasswordGate();
-    ["dashboardBtn", "statsBtn", "lockBtn", "globalFilterBar"].forEach(id => {
+    ["dashboardBtn", "statsBtn", "comparisonBtn", "lockBtn", "globalFilterBar"].forEach(id => {
         const b = document.getElementById(id);
         if (b) b.classList.add("hidden");
     });
@@ -250,21 +273,38 @@ function escapeHtml(s) {
 }
 
 // ── View switching ───────────────────────────────
+function _setActiveNav(activeId) {
+    ["dashboardBtn", "statsBtn", "comparisonBtn"].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.toggle("active", id === activeId);
+    });
+}
+
+function _toggleViewVisibility(visibleId) {
+    ["dashboardView", "statsView", "comparisonView"].forEach(id => {
+        const v = document.getElementById(id);
+        if (v) v.classList.toggle("hidden", id !== visibleId);
+    });
+}
+
 function showDashboardView() {
     State.currentView = "dashboard";
-    document.getElementById("dashboardView").classList.remove("hidden");
-    document.getElementById("statsView").classList.add("hidden");
-    document.getElementById("dashboardBtn").classList.add("active");
-    document.getElementById("statsBtn").classList.remove("active");
+    _toggleViewVisibility("dashboardView");
+    _setActiveNav("dashboardBtn");
     rerenderAll();
 }
 
 function showStatsView() {
     State.currentView = "stats";
-    document.getElementById("dashboardView").classList.add("hidden");
-    document.getElementById("statsView").classList.remove("hidden");
-    document.getElementById("statsBtn").classList.add("active");
-    document.getElementById("dashboardBtn").classList.remove("active");
+    _toggleViewVisibility("statsView");
+    _setActiveNav("statsBtn");
+    rerenderAll();
+}
+
+function showComparisonView() {
+    State.currentView = "comparison";
+    _toggleViewVisibility("comparisonView");
+    _setActiveNav("comparisonBtn");
     rerenderAll();
 }
 
@@ -349,6 +389,7 @@ function rerenderAll() {
     populateFilterDropdowns();
     if (State.currentView === "dashboard" && typeof renderDashboard === "function") renderDashboard();
     if (State.currentView === "stats" && typeof renderStats === "function") renderStats();
+    if (State.currentView === "comparison" && typeof renderComparison === "function") renderComparison();
     if (window.lucide) lucide.createIcons();
 }
 
