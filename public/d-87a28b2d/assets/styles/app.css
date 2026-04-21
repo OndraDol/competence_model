@@ -721,6 +721,7 @@ html[data-theme="dark"] .filter-bar-global { background: var(--surface); }
     height: 280px !important;
 }
 .stats-card.card-tall .stats-chart-canvas { height: 360px !important; }
+.stats-card.card-xtall .stats-chart-canvas { height: 460px !important; }
 
 /* ── Competence × Oddělení heatmapa ───────── */
 .competence-heatmap {

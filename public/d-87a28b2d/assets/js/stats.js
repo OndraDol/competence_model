@@ -21,6 +21,7 @@ function renderStats() {
 
     host.innerHTML = renderStatsLayout();
     renderStatsKpis(records);
+    renderVisualOverview(records);
     renderQualityBars(records);
     renderCompetenceCharts(records);
     renderDistributionAndTrend(records);
@@ -45,6 +46,22 @@ function renderStatsLayout() {
 
     return `
         <div class="kpi-grid" id="statsKpiGrid"></div>
+
+        <div class="stats-section">
+            <div class="stats-section-title"><span>Vizuální přehled</span></div>
+            <div class="stats-grid-2">
+                <div class="stats-card card-xtall" style="grid-column: 1 / -1;">
+                    <h4>Profil kompetencí podle oddělení</h4>
+                    <div class="stats-sub">Radar ukazuje sílu každé kompetence na stupnici 0–10. Barevná síť = jedno oddělení. Čím větší „paukování" na některé ose, tím lépe oddělení tu kompetenci zvládá.</div>
+                    <canvas id="chartRadar" class="stats-chart-canvas"></canvas>
+                </div>
+                <div class="stats-card card-xtall" style="grid-column: 1 / -1;">
+                    <h4>Všichni kandidáti v čase</h4>
+                    <div class="stats-sub">Každá tečka = jeden kandidát. Osa X: datum hodnocení, osa Y: celkové skóre, barva: oddělení. Zvýrazňuje outliery (velmi silné / velmi slabé kandidáty) a vývoj kvality v čase.</div>
+                    <canvas id="chartScatter" class="stats-chart-canvas"></canvas>
+                </div>
+            </div>
+        </div>
 
         <div class="stats-section">
             <div class="stats-section-title"><span>Kvalita kandidátů podle kategorie</span></div>
@@ -230,6 +247,207 @@ function periodLabel() {
     const p = State.filters.timePeriod;
     const map = { ALL: "celé období", "7D": "posledních 7 dní", "30D": "posledních 30 dní", "90D": "posledních 90 dní", YEAR: "tento rok" };
     return map[p] || "celé období";
+}
+
+// ── Visual overview: radar + scatter ─────────────
+const FORM_PALETTE = {
+    "Salesman":    { stroke: "#3b82f6", fill: "rgba(59,130,246,0.18)"  },
+    "FnI":         { stroke: "#10b981", fill: "rgba(16,185,129,0.18)"  },
+    "Call Centre": { stroke: "#f59e0b", fill: "rgba(245,158,11,0.18)"  },
+    "Test Driver": { stroke: "#8b5cf6", fill: "rgba(139,92,246,0.18)"  },
+    "General":     { stroke: "#ef4444", fill: "rgba(239,68,68,0.18)"   }
+};
+function formColors(form) {
+    return FORM_PALETTE[form] || { stroke: "#94a3b8", fill: "rgba(148,163,184,0.18)" };
+}
+
+function renderVisualOverview(records) {
+    renderCompetenceRadar(records);
+    renderCandidateScatter(records);
+}
+
+function renderCompetenceRadar(records) {
+    // Group by form_name → per competence_id → avg points
+    const byForm = {};
+    records.forEach(r => {
+        const form = r.form_name;
+        if (!form) return;
+        if (!byForm[form]) byForm[form] = { names: {}, totals: {} };
+        (r.competences || []).forEach(c => {
+            if (typeof c.points !== "number") return;
+            const cid = c.competence_id;
+            if (!byForm[form].totals[cid]) byForm[form].totals[cid] = { sum: 0, n: 0 };
+            byForm[form].totals[cid].sum += c.points;
+            byForm[form].totals[cid].n += 1;
+            // Prefer CZ name first encountered
+            if (!byForm[form].names[cid]) byForm[form].names[cid] = c.competence_name;
+        });
+    });
+
+    // Union of all competence IDs across forms, sorted
+    const allCompIds = Array.from(new Set(
+        Object.values(byForm).flatMap(f => Object.keys(f.totals).map(Number))
+    )).sort((a, b) => a - b);
+
+    // Choose label per id — first name seen
+    const labelById = {};
+    allCompIds.forEach(cid => {
+        for (const form of Object.keys(byForm)) {
+            if (byForm[form].names[cid]) { labelById[cid] = byForm[form].names[cid]; break; }
+        }
+        if (!labelById[cid]) labelById[cid] = `ID ${cid}`;
+    });
+
+    // Build datasets — one per form, ordered by total record count (most prominent first)
+    const forms = Object.keys(byForm).sort((a, b) => {
+        const ca = Object.values(byForm[a].totals).reduce((s, t) => s + t.n, 0);
+        const cb = Object.values(byForm[b].totals).reduce((s, t) => s + t.n, 0);
+        return cb - ca;
+    });
+
+    const datasets = forms.map(form => {
+        const colors = formColors(form);
+        return {
+            label: form,
+            data: allCompIds.map(cid => {
+                const t = byForm[form].totals[cid];
+                return t && t.n ? Number((t.sum / t.n).toFixed(2)) : 0;
+            }),
+            backgroundColor: colors.fill,
+            borderColor: colors.stroke,
+            pointBackgroundColor: colors.stroke,
+            pointBorderColor: "#fff",
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            borderWidth: 2
+        };
+    });
+
+    destroyChart("chartRadar");
+    const canvas = document.getElementById("chartRadar");
+    if (!canvas || !allCompIds.length) return;
+    ChartRegistry["chartRadar"] = new Chart(canvas, {
+        type: "radar",
+        data: {
+            labels: allCompIds.map(cid => truncate(labelById[cid], 28)),
+            datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: "bottom", labels: { color: "#475569", font: { size: 11 }, boxWidth: 12, padding: 10 } },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.r.toFixed(2)} bodů`
+                    }
+                }
+            },
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    min: 0,
+                    max: 10,
+                    ticks: {
+                        stepSize: 2,
+                        color: "#94a3b8",
+                        backdropColor: "transparent",
+                        font: { size: 10 }
+                    },
+                    grid: { color: "rgba(148,163,184,0.2)" },
+                    angleLines: { color: "rgba(148,163,184,0.25)" },
+                    pointLabels: { color: "#334155", font: { size: 11, weight: "600" } }
+                }
+            }
+        }
+    });
+}
+
+function renderCandidateScatter(records) {
+    const byForm = {};
+    records.forEach(r => {
+        if (!r.date_filled || typeof r.total_points !== "number") return;
+        const t = Date.parse(r.date_filled);
+        if (!Number.isFinite(t)) return;
+        const form = r.form_name || "—";
+        if (!byForm[form]) byForm[form] = [];
+        byForm[form].push({
+            x: t,
+            y: r.total_points,
+            name: r.candidate_fullname,
+            date: r.date_filled,
+            manager: r.manager_name,
+            city: r.client_branch_name,
+            position: r.catalog_position
+        });
+    });
+
+    const datasets = Object.entries(byForm).map(([form, pts]) => {
+        const colors = formColors(form);
+        return {
+            label: form,
+            data: pts,
+            backgroundColor: colors.stroke + "cc",
+            borderColor: colors.stroke,
+            borderWidth: 1,
+            pointRadius: 4,
+            pointHoverRadius: 7
+        };
+    });
+
+    destroyChart("chartScatter");
+    const canvas = document.getElementById("chartScatter");
+    if (!canvas) return;
+    ChartRegistry["chartScatter"] = new Chart(canvas, {
+        type: "scatter",
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: "bottom", labels: { color: "#475569", font: { size: 11 }, boxWidth: 12, padding: 10 } },
+                tooltip: {
+                    callbacks: {
+                        title: () => "",
+                        label: (ctx) => {
+                            const p = ctx.raw;
+                            return [
+                                `${p.name || "—"} (${ctx.dataset.label})`,
+                                `Skóre: ${p.y} · Datum: ${p.date}`,
+                                `${p.position || ""} · ${p.city || ""}`,
+                                `Manažer: ${p.manager || "—"}`
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: "linear",
+                    ticks: {
+                        color: "#64748b",
+                        font: { size: 10 },
+                        callback: (value) => {
+                            const d = new Date(value);
+                            return d.toLocaleDateString("cs-CZ", { month: "short", year: "2-digit" });
+                        },
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 12
+                    },
+                    grid: { color: "rgba(148,163,184,0.12)" },
+                    title: { display: true, text: "Datum hodnocení", color: "#94a3b8", font: { size: 11 } }
+                },
+                y: {
+                    beginAtZero: true,
+                    max: 70,
+                    ticks: { color: "#64748b" },
+                    grid: { color: "rgba(148,163,184,0.12)" },
+                    title: { display: true, text: "Celkové skóre (z 70)", color: "#94a3b8", font: { size: 11 } }
+                }
+            }
+        }
+    });
 }
 
 // ── Utility helpers ──────────────────────────────
