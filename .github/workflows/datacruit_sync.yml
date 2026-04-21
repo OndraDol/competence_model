@@ -1,16 +1,18 @@
-name: Datacruit to Firebase Sync
+name: Datacruit competence_models to Firebase Sync
 
 on:
   schedule:
-    # Mondays, Thursdays, Fridays. 04:00 UTC.
-    - cron: '0 4 * * 1,4,5'
+    # 07:00 UTC denně = 08:00 CET zimní / 09:00 CEST letní.
+    # Single cron pattern (stejně jako Vacancies) — GitHub Actions nepoužívá DST,
+    # takže jedna posunutá hodina v létě je akceptovatelný trade-off oproti duplicitním sync.
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: datacruit-sync
+  group: competence-model-sync
   cancel-in-progress: false
 
 jobs:
@@ -31,13 +33,99 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run sync
+      - name: Run sync with scheduled retry handling
+        id: sync
+        shell: bash
         env:
           DATACRUIT_USERNAME: ${{ secrets.DATACRUIT_USERNAME }}
           DATACRUIT_PASSWORD: ${{ secrets.DATACRUIT_PASSWORD }}
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
           FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
         run: |
-          # TODO: vytvořit ats_sync.py podle vzoru Vacancies repa
-          echo "Sync skript zatím není implementován"
-          exit 0
+          set -uo pipefail
+
+          artifact_dir="$RUNNER_TEMP/competence-sync-diagnostics"
+          summary_path="$RUNNER_TEMP/competence-sync-summary.md"
+          mkdir -p "$artifact_dir"
+          : > "$summary_path"
+          echo "## Competence Model Sync Attempts" >> "$summary_path"
+
+          retry_delays="$(python -c "import ats_sync; print(' '.join(str(v) for v in ats_sync.get_retry_delay_minutes('${{ github.event_name }}')))")"
+
+          read -r -a retry_delay_array <<< "$retry_delays"
+          total_attempts=${#retry_delay_array[@]}
+          final_status="hard_failure"
+          final_exit_code=1
+          attempt_count=0
+
+          for delay_minutes in "${retry_delay_array[@]}"; do
+            attempt_count=$((attempt_count + 1))
+
+            if [ "$delay_minutes" -gt 0 ]; then
+              echo "Waiting ${delay_minutes} minutes before retry attempt ${attempt_count}."
+              sleep "${delay_minutes}m"
+            fi
+
+            log_path="$artifact_dir/attempt-${attempt_count}.log"
+            echo "Starting competence_models sync attempt ${attempt_count} at $(date -u '+%Y-%m-%d %H:%M:%S UTC')."
+
+            set +e
+            python ats_sync.py 2>&1 | tee "$log_path"
+            exit_code=${PIPESTATUS[0]}
+            set -e
+
+            status_line=$(grep '^SYNC_STATUS:' "$log_path" | tail -n 1 || true)
+            status_json="${status_line#SYNC_STATUS: }"
+            status_name="missing"
+            status_detail=""
+            if [ -n "$status_json" ]; then
+              status_name=$(python -c "import json,sys; print((json.loads(sys.stdin.read()) or {}).get('status', 'missing'))" <<< "$status_json")
+              status_detail=$(python -c "import json,sys; d=json.loads(sys.stdin.read()) or {}; rs=d.get('reasons') or []; err=d.get('error') or ''; print('; '.join(rs) if rs else err)" <<< "$status_json")
+            fi
+
+            printf '%s' "- Attempt ${attempt_count}: \`${status_name}\` (exit \`${exit_code}\`)" >> "$summary_path"
+            if [ -n "$status_detail" ]; then
+              printf '%s' " — ${status_detail}" >> "$summary_path"
+            fi
+            printf '\n' >> "$summary_path"
+
+            if [ "$status_name" != "missing" ]; then
+              final_status="$status_name"
+            else
+              final_status="hard_failure"
+            fi
+            final_exit_code=$exit_code
+
+            if [ "$exit_code" -eq 0 ]; then
+              break
+            fi
+
+            if [ "$exit_code" -eq 20 ] && [ "$attempt_count" -lt "$total_attempts" ]; then
+              echo "Detected degraded upstream dataset on attempt ${attempt_count}; retrying."
+              continue
+            fi
+
+            break
+          done
+
+          echo "final_status=$final_status" >> "$GITHUB_OUTPUT"
+          echo "final_exit_code=$final_exit_code" >> "$GITHUB_OUTPUT"
+          echo "attempt_count=$attempt_count" >> "$GITHUB_OUTPUT"
+          echo "artifact_dir=$artifact_dir" >> "$GITHUB_OUTPUT"
+          cat "$summary_path" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sync diagnostics artifact
+        if: steps.sync.outputs.final_exit_code != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: competence-sync-diagnostics-${{ github.run_id }}
+          path: ${{ steps.sync.outputs.artifact_dir }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Fail workflow on degraded or hard failure
+        if: steps.sync.outputs.final_exit_code != '0'
+        shell: bash
+        run: |
+          echo "Final sync status: ${{ steps.sync.outputs.final_status }}"
+          exit "${{ steps.sync.outputs.final_exit_code }}"
