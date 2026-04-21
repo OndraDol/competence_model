@@ -1,20 +1,33 @@
-"""Datacruit competence_models -> Firebase RTDB sync.
+"""Datacruit competence_models -> encrypted JSON blob.
 
-Pattern převzatý z Vacancies/ats_sync.py (fetch_data, JSON repair, SYNC_STATUS,
-Firebase helpers, auth probe, retry delays, SyncAbort).
+Fetches the competence_models dataset from Datacruit and writes it to
+`public/d-<slug>/data.enc.json` in AES-256-GCM ciphertext keyed by PBKDF2(DASHBOARD_PASSWORD).
+The static frontend on GH Pages decrypts the blob with the same password in the browser.
+
+Design pattern adapted from Vacancies/ats_sync.py:
+- fetch_data() incl. JSON repair
+- SyncAbort exception + exit codes (0 success, 20 degraded, 1 hard fail)
+- emit_sync_status() log tag for GitHub Actions summary
+- get_retry_delay_minutes() schedule-based retry policy
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
+import glob
 import json
 import os
+import secrets
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import requests
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from requests.auth import HTTPBasicAuth
 
 # --- Configuration ---------------------------------------------------------
@@ -24,8 +37,9 @@ DATASET_NAME = "competence_models"
 
 DC_USER = os.environ.get("DATACRUIT_USERNAME")
 DC_PASS = os.environ.get("DATACRUIT_PASSWORD")
-FIREBASE_URL = (os.environ.get("FIREBASE_DATABASE_URL") or "").strip().rstrip("/")
-FIREBASE_SECRET = os.environ.get("FIREBASE_SECRET")
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD")
+
+DASHBOARD_BLOB_GLOB = "public/d-*/data.enc.json"
 
 HTTP_TIMEOUT_SECONDS = 60
 
@@ -42,6 +56,13 @@ SYNC_RETRY_DELAYS_MINUTES = (0, 30, 60)
 # Guards — minimum acceptable dataset health
 MIN_RECORD_COUNT = 100
 MAX_DROP_RATIO = 0.5  # abort if new count < 50% of previous
+
+# Encryption parameters — must match frontend assets/js/crypto.js constants.
+PBKDF2_ITERATIONS = 250_000
+PBKDF2_SALT_BYTES = 32
+AES_GCM_IV_BYTES = 12
+BLOB_VERSION = 1
+BLOB_ALGO = "AES-256-GCM-PBKDF2-SHA256"
 
 
 FETCH_DIAGNOSTICS: dict[str, dict[str, Any]] = {}
@@ -85,7 +106,6 @@ def emit_sync_status(status: str, **details: Any) -> None:
 
 
 def get_retry_delay_minutes(event_name: str | None) -> tuple[int, ...]:
-    """For scheduled/manual triggers use retry schedule, otherwise single attempt."""
     if str(event_name or "").strip() in ("schedule", "workflow_dispatch"):
         return SYNC_RETRY_DELAYS_MINUTES
     return (0,)
@@ -106,7 +126,6 @@ def _ensure_list_payload(data: Any) -> list:
 
 
 def fetch_data(dataset: str) -> list[dict]:
-    """Fetch a Datacruit public export dataset. Handles JSON repair like Vacancies."""
     FETCH_DIAGNOSTICS[dataset] = {"jsonRepairApplied": False}
     response = requests.get(
         DATACRUIT_URL,
@@ -164,119 +183,54 @@ def fetch_data(dataset: str) -> list[dict]:
         return _ensure_list_payload(json.loads(text))
 
 
-# --- Firebase helpers ------------------------------------------------------
+# --- Encryption ------------------------------------------------------------
 
 
-def firebase_params(extra: dict | None = None) -> dict:
-    params: dict[str, Any] = {}
-    if FIREBASE_SECRET:
-        params["auth"] = FIREBASE_SECRET
-    if extra:
-        params.update(extra)
-    return params
-
-
-def firebase_put(path: str, payload: Any, *, params_extra: dict | None = None) -> requests.Response:
-    url = f"{FIREBASE_URL}/{path.lstrip('/')}.json"
-    response = requests.put(
-        url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json; charset=utf-8"},
-        params=firebase_params(params_extra),
-        timeout=HTTP_TIMEOUT_SECONDS,
+def derive_key(password: str, salt: bytes) -> bytes:
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=PBKDF2_ITERATIONS,
     )
-    if not response.ok:
-        print(
-            "FIREBASE_HTTP_ERROR:",
-            json.dumps(
-                {
-                    "method": "PUT",
-                    "path": path,
-                    "status": response.status_code,
-                    "reason": response.reason,
-                    "bodySnippet": _compact_log_text(response.text),
-                },
-                ensure_ascii=False,
-            ),
-        )
-    response.raise_for_status()
-    return response
+    return kdf.derive(password.encode("utf-8"))
 
 
-def firebase_patch(path: str, payload: dict, *, params_extra: dict | None = None) -> requests.Response:
-    url = f"{FIREBASE_URL}/{path.lstrip('/')}.json"
-    response = requests.patch(
-        url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json; charset=utf-8"},
-        params=firebase_params(params_extra),
-        timeout=HTTP_TIMEOUT_SECONDS,
-    )
-    if not response.ok:
-        print(
-            "FIREBASE_HTTP_ERROR:",
-            json.dumps(
-                {
-                    "method": "PATCH",
-                    "path": path,
-                    "status": response.status_code,
-                    "reason": response.reason,
-                    "bodySnippet": _compact_log_text(response.text),
-                },
-                ensure_ascii=False,
-            ),
-        )
-    response.raise_for_status()
-    return response
+def encrypt_payload(password: str, records: list[dict], meta: dict) -> dict:
+    plaintext = json.dumps({"records": records, "meta": meta}, ensure_ascii=False).encode("utf-8")
+    salt = secrets.token_bytes(PBKDF2_SALT_BYTES)
+    iv = secrets.token_bytes(AES_GCM_IV_BYTES)
+    key = derive_key(password, salt)
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(iv, plaintext, associated_data=None)
+
+    return {
+        "v": BLOB_VERSION,
+        "algo": BLOB_ALGO,
+        "iter": PBKDF2_ITERATIONS,
+        "salt": base64.b64encode(salt).decode("ascii"),
+        "iv": base64.b64encode(iv).decode("ascii"),
+        "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
+        # Unencrypted metadata — safe to reveal, useful for UI "last sync" badge.
+        "syncedAt": meta.get("syncedAt"),
+        "datacruitFetchedAt": meta.get("datacruitFetchedAt"),
+        "recordCount": meta.get("recordCount"),
+        "jsonRepairApplied": meta.get("jsonRepairApplied", False),
+    }
 
 
-def firebase_get(path: str) -> Any:
-    url = f"{FIREBASE_URL}/{path.lstrip('/')}.json"
-    response = requests.get(url, params=firebase_params(), timeout=HTTP_TIMEOUT_SECONDS)
-    if response.status_code == 404:
-        return None
-    response.raise_for_status()
-    return response.json()
+def decrypt_payload(password: str, blob: dict) -> dict:
+    """Round-trip helper used by tests. Frontend does the same thing in WebCrypto."""
+    salt = base64.b64decode(blob["salt"])
+    iv = base64.b64decode(blob["iv"])
+    ciphertext = base64.b64decode(blob["ciphertext"])
+    key = derive_key(password, salt)
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(iv, ciphertext, associated_data=None)
+    return json.loads(plaintext.decode("utf-8"))
 
 
-def verify_firebase_write_access() -> None:
-    """Preflight PUT to a sentinel path. Fails fast if secret is missing/invalid."""
-    url = f"{FIREBASE_URL}/__sync_auth_probe__.json"
-    response = requests.put(
-        url,
-        data="null",
-        headers={"Content-Type": "application/json"},
-        params=firebase_params({"print": "silent"}),
-        timeout=HTTP_TIMEOUT_SECONDS,
-    )
-    if not response.ok:
-        print(
-            "FIREBASE_AUTH_PRECHECK_ERROR:",
-            json.dumps(
-                {
-                    "status": response.status_code,
-                    "reason": response.reason,
-                    "hasFirebaseSecret": bool(FIREBASE_SECRET),
-                    "bodySnippet": _compact_log_text(response.text),
-                },
-                ensure_ascii=False,
-            ),
-        )
-    response.raise_for_status()
-
-
-def warn_if_suspicious_firebase_url() -> None:
-    if not FIREBASE_URL:
-        return
-    parsed = urlparse(FIREBASE_URL)
-    if FIREBASE_URL.endswith(".json") or "firebaseio" not in parsed.netloc and "firebasedatabase" not in parsed.netloc:
-        print(
-            "FIREBASE_URL_WARNING:",
-            json.dumps({"url": FIREBASE_URL, "warning": "URL does not look like a Firebase RTDB root"}, ensure_ascii=False),
-        )
-
-
-# --- Validation ------------------------------------------------------------
+# --- Validation + file IO ------------------------------------------------
 
 
 def validate_runtime_configuration() -> None:
@@ -285,24 +239,46 @@ def validate_runtime_configuration() -> None:
         missing.append("DATACRUIT_USERNAME")
     if not DC_PASS:
         missing.append("DATACRUIT_PASSWORD")
-    if not FIREBASE_URL:
-        missing.append("FIREBASE_DATABASE_URL")
+    if not DASHBOARD_PASSWORD:
+        missing.append("DASHBOARD_PASSWORD")
     if missing:
         raise SyncAbort(
             SYNC_STATUS_HARD_FAILURE,
             reasons=[f"Missing env variable: {name}" for name in missing],
             error=f"Missing required environment: {', '.join(missing)}",
         )
-    print(
-        "FIREBASE_AUTH_MODE:",
-        json.dumps(
-            {
-                "mode": "secret" if FIREBASE_SECRET else "unauthenticated",
-                "host": urlparse(FIREBASE_URL).netloc,
-            },
-            ensure_ascii=False,
-        ),
-    )
+
+
+def find_blob_path() -> Path:
+    matches = sorted(glob.glob(DASHBOARD_BLOB_GLOB))
+    if not matches:
+        raise SyncAbort(
+            SYNC_STATUS_HARD_FAILURE,
+            reasons=[f"No dashboard directory matches {DASHBOARD_BLOB_GLOB}"],
+            error="Dashboard directory (public/d-<slug>/) not found",
+        )
+    if len(matches) > 1:
+        raise SyncAbort(
+            SYNC_STATUS_HARD_FAILURE,
+            reasons=[f"Multiple dashboard directories match {DASHBOARD_BLOB_GLOB}: {matches}"],
+            error="Expected exactly one public/d-<slug>/ directory",
+        )
+    return Path(matches[0])
+
+
+def read_previous_meta(path: Path) -> dict | None:
+    """Reads unencrypted meta from a previous blob; returns None if missing/corrupt."""
+    if not path.exists():
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            existing = json.load(fh)
+        return {
+            "recordCount": existing.get("recordCount"),
+            "syncedAt": existing.get("syncedAt"),
+        }
+    except (OSError, ValueError):
+        return None
 
 
 def get_degradation_reasons(records: list[dict], previous_count: int | None) -> list[str]:
@@ -317,7 +293,8 @@ def get_degradation_reasons(records: list[dict], previous_count: int | None) -> 
         drop_ratio = 1 - (count / previous_count)
         if drop_ratio > MAX_DROP_RATIO:
             reasons.append(
-                f"record count dropped from {previous_count} to {count} ({drop_ratio:.0%} drop exceeds {MAX_DROP_RATIO:.0%} threshold)"
+                f"record count dropped from {previous_count} to {count} "
+                f"({drop_ratio:.0%} drop exceeds {MAX_DROP_RATIO:.0%} threshold)"
             )
     diagnostics = FETCH_DIAGNOSTICS.get(DATASET_NAME) or {}
     if diagnostics.get("jsonRepairApplied"):
@@ -328,68 +305,26 @@ def get_degradation_reasons(records: list[dict], previous_count: int | None) -> 
 # --- Main sync flow --------------------------------------------------------
 
 
-def normalize_result(record: dict) -> tuple[str, dict]:
-    """Return (firebase_key, sanitized_record). Firebase keys cannot contain . $ # [ ] /."""
-    rid = record.get("result_id")
-    if rid is None:
-        raise SyncAbort(
-            SYNC_STATUS_HARD_FAILURE,
-            reasons=["record without result_id"],
-            error="Encountered Datacruit record without result_id",
-        )
-    firebase_key = str(rid)
-    return firebase_key, record
-
-
-def upload_results(records: list[dict], upload_id: str) -> dict:
-    """Upload all records to /results and a snapshot to /syncSnapshots/{uploadId}."""
-    payload = {}
-    for record in records:
-        key, normalized = normalize_result(record)
-        payload[key] = normalized
-
-    # PUT /results (overwrite) — HR scores live at /hrScores so they are not touched.
-    firebase_put("results", payload)
-
-    # Snapshot the full set (includes meta for rollback).
-    snapshot_meta = {
-        "uploadedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "recordCount": len(records),
+def build_meta(record_count: int, fetched_at: str, synced_at: str) -> dict:
+    return {
+        "syncedAt": synced_at,
+        "datacruitFetchedAt": fetched_at,
+        "recordCount": record_count,
+        "jsonRepairApplied": bool(FETCH_DIAGNOSTICS.get(DATASET_NAME, {}).get("jsonRepairApplied")),
     }
-    firebase_put(f"syncSnapshots/{upload_id}", {"results": payload, "meta": snapshot_meta})
-
-    return snapshot_meta
-
-
-def publish_meta(upload_id: str, record_count: int, fetched_at: str) -> None:
-    meta_payload = {
-        "lastSync": {
-            "uploadId": upload_id,
-            "uploadedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-            "source": f"datacruit:{DATASET_NAME}",
-            "datacruitFetchedAt": fetched_at,
-            "recordCount": record_count,
-            "jsonRepairApplied": bool(FETCH_DIAGNOSTICS.get(DATASET_NAME, {}).get("jsonRepairApplied")),
-        },
-        "version": "1",
-    }
-    firebase_patch("meta", meta_payload)
-
-
-def get_previous_record_count() -> int | None:
-    meta = firebase_get("meta/lastSync")
-    if isinstance(meta, dict):
-        count = meta.get("recordCount")
-        if isinstance(count, int):
-            return count
-    return None
 
 
 def main() -> int:
-    print("--- Start Datacruit competence_models -> Firebase Sync ---")
+    print("--- Start Datacruit competence_models -> encrypted blob ---")
     validate_runtime_configuration()
-    warn_if_suspicious_firebase_url()
-    verify_firebase_write_access()
+
+    blob_path = find_blob_path()
+    prev = read_previous_meta(blob_path)
+    previous_count = prev.get("recordCount") if prev else None
+    print(
+        "DASHBOARD_BLOB:",
+        json.dumps({"path": str(blob_path), "previousRecordCount": previous_count}, ensure_ascii=False),
+    )
 
     fetched_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     records = fetch_data(DATASET_NAME)
@@ -398,7 +333,6 @@ def main() -> int:
         json.dumps({"dataset": DATASET_NAME, "recordCount": len(records)}, ensure_ascii=False),
     )
 
-    previous_count = get_previous_record_count()
     reasons = get_degradation_reasons(records, previous_count)
     if reasons:
         print("SUSPICIOUS_SYNC_ABORT:", json.dumps({"reasons": reasons}, ensure_ascii=False))
@@ -409,17 +343,21 @@ def main() -> int:
             error="; ".join(reasons),
         )
 
-    upload_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    snapshot_meta = upload_results(records, upload_id)
-    publish_meta(upload_id, len(records), fetched_at)
+    synced_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    meta = build_meta(len(records), fetched_at, synced_at)
+    blob = encrypt_payload(DASHBOARD_PASSWORD, records, meta)
+
+    blob_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(blob_path, "w", encoding="utf-8") as fh:
+        json.dump(blob, fh, ensure_ascii=False, indent=2)
 
     emit_sync_status(
         SYNC_STATUS_SUCCESS,
         exitCode=SYNC_EXIT_CODE_SUCCESS,
         recordCount=len(records),
         previousCount=previous_count,
-        uploadId=upload_id,
-        snapshotUploadedAt=snapshot_meta["uploadedAt"],
+        blobPath=str(blob_path),
+        syncedAt=synced_at,
     )
     return SYNC_EXIT_CODE_SUCCESS
 
@@ -428,7 +366,7 @@ def main() -> int:
 
 
 def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Datacruit competence_models -> Firebase sync")
+    parser = argparse.ArgumentParser(description="Datacruit competence_models -> encrypted blob")
     return parser.parse_args(argv)
 
 

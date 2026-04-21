@@ -1,6 +1,7 @@
 /* ═════════════════════════════════════════════════
    AURES Competence Model — Stats view
-   KPI cards + 11 visualisations reacting to country switch.
+   6 KPI cards + 11 visualisations reacting to country switch.
+   Read-only — works only with manager data from Datacruit.
    ═════════════════════════════════════════════════ */
 
 const ChartRegistry = {};
@@ -17,37 +18,19 @@ function renderStats() {
     if (!host) return;
 
     const records = getFilteredResults();
-    // Stats ignores `hrStatus` filter — we want full picture including unrated.
-    const recordsForStats = getFilteredResultsIgnoringHrStatus();
 
     host.innerHTML = renderStatsLayout();
-    renderStatsKpis(recordsForStats);
+    renderStatsKpis(records);
 
-    renderTopBottomTables(recordsForStats);
-    renderAvgByDimension(recordsForStats);
-    renderCompetenceDistribution(recordsForStats);
-    renderTimeTrend(recordsForStats);
+    renderTopBottomTables(records);
+    renderAvgByDimension(records);
+    renderCompetenceDistribution(records);
+    renderTimeTrend(records);
     if (State.globalCountry === "ALL") renderCountryCompare();
-    renderManagerVsHr(recordsForStats);
-    renderContestedTable(recordsForStats);
+    renderTotalPointsHistogram(records);
+    renderFormStatsTable(records);
 
     if (window.lucide) lucide.createIcons();
-}
-
-function getFilteredResultsIgnoringHrStatus() {
-    const needle = State.search;
-    return getAllResultsArray()
-        .filter(r => applyCountry(r))
-        .filter(r => {
-            const f = State.filters;
-            if (f.form !== "ALL" && r.form_name !== f.form) return false;
-            if (f.catalog !== "ALL" && r.catalog_position !== f.catalog) return false;
-            if (f.branch !== "ALL" && r.system_company_branch_name !== f.branch) return false;
-            if (f.manager !== "ALL" && r.manager_name !== f.manager) return false;
-            if (State.globalCountry === "ALL" && f.country !== "ALL" && r.country !== f.country) return false;
-            return true;
-        })
-        .filter(r => matchesSearch(r, needle));
 }
 
 // ── Layout template ──────────────────────────────
@@ -68,8 +51,8 @@ function renderStatsLayout() {
         <div class="stats-section">
             <div class="stats-section-title"><span>Top &amp; Bottom kandidáti</span></div>
             <div class="stats-grid-2">
-                <div class="stats-card"><h4>TOP 10 kandidátů</h4><div class="stats-sub">Nejvyšší total_points od manažera</div><div id="topCandidatesTable"></div></div>
-                <div class="stats-card"><h4>BOTTOM 10 kandidátů</h4><div class="stats-sub">Nejnižší total_points od manažera</div><div id="bottomCandidatesTable"></div></div>
+                <div class="stats-card"><h4>TOP 10 kandidátů</h4><div class="stats-sub">Nejvyšší total_points</div><div id="topCandidatesTable"></div></div>
+                <div class="stats-card"><h4>BOTTOM 10 kandidátů</h4><div class="stats-sub">Nejnižší total_points</div><div id="bottomCandidatesTable"></div></div>
             </div>
         </div>
 
@@ -86,20 +69,14 @@ function renderStatsLayout() {
         <div class="stats-section">
             <div class="stats-section-title"><span>Distribuce &amp; trendy</span></div>
             <div class="stats-grid-2">
-                <div class="stats-card card-tall"><h4>Distribuce bodů per kompetence</h4><div class="stats-sub">Manažerovo hodnocení 1–10 u každého competence_id</div><canvas id="chartCompetenceDist" class="stats-chart-canvas"></canvas></div>
+                <div class="stats-card card-tall"><h4>Distribuce bodů per kompetence</h4><div class="stats-sub">Stacked bar: jakou část bodů (1–10) dává manažer u každého competence_id</div><canvas id="chartCompetenceDist" class="stats-chart-canvas"></canvas></div>
                 <div class="stats-card"><h4>Trend průměrného total_points v čase</h4><div class="stats-sub">Měsíční agregace dle date_filled</div><canvas id="chartTrend" class="stats-chart-canvas"></canvas></div>
+                <div class="stats-card"><h4>Histogram total_points</h4><div class="stats-sub">Rozložení kandidátů do pásem po 10 bodech</div><canvas id="chartHistogram" class="stats-chart-canvas"></canvas></div>
+                <div class="stats-card"><h4>Statistiky per pozice</h4><div class="stats-sub">Min / Q1 / Medián / Q3 / Max / Ø</div><div id="formStatsTable"></div></div>
             </div>
         </div>
 
-        ${countryCompareSection}
-
-        <div class="stats-section">
-            <div class="stats-section-title"><span>Manažer vs. HR</span></div>
-            <div class="stats-grid-2">
-                <div class="stats-card"><h4>Průměrná odchylka |M−HR| per kompetence</h4><div class="stats-sub">Jen kandidáti, kde HR vyplnil hodnocení</div><canvas id="chartDiffByCompetence" class="stats-chart-canvas"></canvas></div>
-                <div class="stats-card"><h4>Sporní kandidáti (top 10 podle max |∆|)</h4><div class="stats-sub">Kde se HR nejvíc rozchází s manažerem</div><div id="contestedTable"></div></div>
-            </div>
-        </div>`;
+        ${countryCompareSection}`;
 }
 
 // ── KPI cards ────────────────────────────────────
@@ -109,29 +86,12 @@ function renderStatsKpis(records) {
 
     const count = records.length;
     const avgTotal = count ? (records.reduce((s, r) => s + (r.total_points || 0), 0) / count) : 0;
-    const hrFilled = records.filter(r => State.hrScores[r.result_id]).length;
-    const hrPct = count ? Math.round((hrFilled / count) * 100) : 0;
-
-    let deltaSum = 0, deltaCount = 0;
-    records.forEach(r => {
-        const hr = State.hrScores[r.result_id];
-        if (!hr) return;
-        (r.competences || []).forEach(c => {
-            const hrPts = hr.perCompetence ? hr.perCompetence[c.competence_id] : undefined;
-            if (typeof hrPts === "number" && typeof c.points === "number") {
-                deltaSum += Math.abs(hrPts - c.points);
-                deltaCount++;
-            }
-        });
-    });
-    const avgDelta = deltaCount ? (deltaSum / deltaCount) : 0;
-    const agreement = deltaCount ? Math.max(0, 1 - (avgDelta / 9)) : 0; // scaled to 0..1 (max delta is 9)
+    const totals = records.map(r => r.total_points || 0).sort((a, b) => a - b);
+    const maxTotal = totals.length ? totals[totals.length - 1] : 0;
+    const medianTotal = totals.length ? median(totals) : 0;
 
     const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;
-    const thisWeek = records.filter(r => {
-        if (!r.date_filled) return false;
-        return new Date(r.date_filled).getTime() >= sevenDaysAgo;
-    }).length;
+    const thisWeek = records.filter(r => r.date_filled && new Date(r.date_filled).getTime() >= sevenDaysAgo).length;
 
     const managerCounts = {};
     records.forEach(r => {
@@ -149,26 +109,26 @@ function renderStatsKpis(records) {
         </div>
         <div class="kpi-card accent-slate">
             <div class="kpi-icon"><i data-lucide="gauge" style="color:var(--text-muted);width:18px;height:18px;"></i></div>
-            <div class="kpi-label">Průměr total (manager)</div>
+            <div class="kpi-label">Průměr total</div>
             <div class="kpi-value">${avgTotal.toFixed(1)}</div>
             <div class="kpi-sub">z max. 70</div>
         </div>
+        <div class="kpi-card accent-slate">
+            <div class="kpi-icon"><i data-lucide="align-center" style="color:var(--text-muted);width:18px;height:18px;"></i></div>
+            <div class="kpi-label">Medián total</div>
+            <div class="kpi-value">${medianTotal.toFixed(1)}</div>
+            <div class="kpi-sub">středový kandidát</div>
+        </div>
         <div class="kpi-card accent-green">
-            <div class="kpi-icon"><i data-lucide="check-circle-2" style="color:var(--accent-ok);width:18px;height:18px;"></i></div>
-            <div class="kpi-label">% s HR hodnocením</div>
-            <div class="kpi-value" style="color:var(--accent-ok);">${hrPct}%</div>
-            <div class="kpi-sub">${hrFilled} z ${count}</div>
+            <div class="kpi-icon"><i data-lucide="award" style="color:var(--accent-ok);width:18px;height:18px;"></i></div>
+            <div class="kpi-label">Nejvyšší skóre</div>
+            <div class="kpi-value" style="color:var(--accent-ok);">${maxTotal}</div>
+            <div class="kpi-sub">top kandidát</div>
         </div>
         <div class="kpi-card accent-amber">
-            <div class="kpi-icon"><i data-lucide="handshake" style="color:var(--accent-warn);width:18px;height:18px;"></i></div>
-            <div class="kpi-label">Shoda M ↔ HR</div>
-            <div class="kpi-value" style="color:#b45309;">${Math.round(agreement * 100)}%</div>
-            <div class="kpi-sub">průměrná odchylka ${avgDelta.toFixed(2)}</div>
-        </div>
-        <div class="kpi-card accent-blue">
-            <div class="kpi-icon"><i data-lucide="calendar-clock" style="color:var(--brand-500);width:18px;height:18px;"></i></div>
+            <div class="kpi-icon"><i data-lucide="calendar-clock" style="color:var(--accent-warn);width:18px;height:18px;"></i></div>
             <div class="kpi-label">Tento týden</div>
-            <div class="kpi-value" style="color:var(--brand-600);">${thisWeek}</div>
+            <div class="kpi-value" style="color:#b45309;">${thisWeek}</div>
             <div class="kpi-sub">nových hodnocení</div>
         </div>
         <div class="kpi-card accent-slate">
@@ -179,11 +139,30 @@ function renderStatsKpis(records) {
         </div>`;
 }
 
+function median(sortedArr) {
+    if (!sortedArr.length) return 0;
+    const mid = Math.floor(sortedArr.length / 2);
+    return sortedArr.length % 2 === 0
+        ? (sortedArr[mid - 1] + sortedArr[mid]) / 2
+        : sortedArr[mid];
+}
+
+function quantile(sortedArr, q) {
+    if (!sortedArr.length) return 0;
+    const pos = (sortedArr.length - 1) * q;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    if (sortedArr[base + 1] !== undefined) {
+        return sortedArr[base] + rest * (sortedArr[base + 1] - sortedArr[base]);
+    }
+    return sortedArr[base];
+}
+
 // ── 1+2: Top/Bottom candidate tables ─────────────
 function renderTopBottomTables(records) {
     const sorted = records.slice().sort((a, b) => (b.total_points || 0) - (a.total_points || 0));
     const top = sorted.slice(0, 10);
-    const bottom = sorted.slice(-10).reverse(); // lowest first becomes bottom list
+    const bottom = sorted.slice(-10).reverse();
 
     const renderTable = (rows) => {
         if (!rows.length) return `<p style="color:var(--text-muted);font-size:13px;padding:8px;">Žádná data.</p>`;
@@ -226,7 +205,6 @@ function groupAvg(records, key, minCount = 1) {
 }
 
 function renderAvgByDimension(records) {
-    // 3. form_name — vertical bar
     const byForm = groupAvg(records, "form_name").sort((a, b) => b.avg - a.avg);
     destroyChart("chartByForm");
     ChartRegistry["chartByForm"] = new Chart(document.getElementById("chartByForm"), {
@@ -242,16 +220,11 @@ function renderAvgByDimension(records) {
                 borderRadius: 6
             }]
         },
-        options: chartOptions({ suggestedMax: 70, barCount: byForm.length, showCountTooltip: byForm }),
+        options: chartOptions({ suggestedMax: 70, showCountTooltip: byForm }),
     });
 
-    // 4. branch — horizontal TOP 10
     renderHorizontalBarTop10("chartByBranch", groupAvg(records, "system_company_branch_name", 3), "#10b981");
-
-    // 5. manager — horizontal TOP 10 (min 3)
     renderHorizontalBarTop10("chartByManager", groupAvg(records, "manager_name", 3), "#f59e0b");
-
-    // 6. client_branch — horizontal TOP 10 (min 3)
     renderHorizontalBarTop10("chartByClientBranch", groupAvg(records, "client_branch_name", 3), "#8b5cf6");
 }
 
@@ -317,10 +290,9 @@ function chartOptions({ suggestedMax = 70, showCountTooltip = null } = {}) {
     };
 }
 
-// ── 7: Competence distribution ───────────────────
+// ── 7: Competence distribution (stacked bar) ─────
 function renderCompetenceDistribution(records) {
-    // Collect per-competence distribution of points 1..10
-    const byComp = {}; // { [competence_id]: { name, distribution: {1..10: count} } }
+    const byComp = {};
     records.forEach(r => {
         (r.competences || []).forEach(c => {
             const cid = c.competence_id;
@@ -332,12 +304,9 @@ function renderCompetenceDistribution(records) {
     const compIds = Object.keys(byComp).map(Number).sort((a, b) => a - b);
 
     const datasets = [];
-    const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#0ea5e9", "#22c55e", "#eab308", "#f97316", "#64748b"];
-    // Stacked: x-axis = competence, colors = points 1..10
-    // Build one dataset per point value
     for (let p = 1; p <= 10; p++) {
         datasets.push({
-            label: `${p} bod${p === 1 ? "" : (p < 5 ? "y" : "ů")}`,
+            label: `${p}`,
             data: compIds.map(cid => byComp[cid].distribution[p] || 0),
             backgroundColor: scoreColor(p),
             borderWidth: 0,
@@ -356,7 +325,13 @@ function renderCompetenceDistribution(records) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: "bottom", labels: { color: "#475569", font: { size: 10 } } }
+                legend: { position: "bottom", labels: { color: "#475569", font: { size: 10 }, boxWidth: 12 } },
+                tooltip: {
+                    callbacks: {
+                        title: (items) => items[0] ? items[0].label : "",
+                        label: (ctx) => `${ctx.dataset.label} bodů: ${ctx.parsed.y}`
+                    }
+                }
             },
             scales: {
                 x: { stacked: true, grid: { display: false }, ticks: { color: "#334155", font: { size: 11 } } },
@@ -367,7 +342,6 @@ function renderCompetenceDistribution(records) {
 }
 
 function scoreColor(p) {
-    // 1..3 red, 4..6 amber, 7..10 green gradient
     if (p <= 2) return "#dc2626";
     if (p <= 4) return "#f97316";
     if (p <= 6) return "#eab308";
@@ -382,7 +356,6 @@ function truncate(s, n) {
 
 // ── 8: Time trend ────────────────────────────────
 function renderTimeTrend(records) {
-    // Monthly aggregation
     const buckets = {};
     records.forEach(r => {
         if (!r.date_filled) return;
@@ -438,7 +411,6 @@ function renderTimeTrend(records) {
 
 // ── 9: Country compare (ALL mode only) ───────────
 function renderCountryCompare() {
-    // Use full dataset filtered ignoring country (we want all three visible)
     const allRecords = getAllResultsArray().filter(r => {
         const f = State.filters;
         if (f.form !== "ALL" && r.form_name !== f.form) return false;
@@ -480,95 +452,100 @@ function renderCountryCompare() {
     });
 }
 
-// ── 10: Manager vs HR diff per competence ────────
-function renderManagerVsHr(records) {
-    // avg |manager - HR| per competence_id
-    const comp = {}; // { id: { name, sum, n } }
+// ── 10: Histogram total_points (7 pásem po 10) ───
+function renderTotalPointsHistogram(records) {
+    const buckets = [0, 0, 0, 0, 0, 0, 0]; // 0-10, 11-20, 21-30, 31-40, 41-50, 51-60, 61-70
+    const labels = ["1–10", "11–20", "21–30", "31–40", "41–50", "51–60", "61–70"];
     records.forEach(r => {
-        const hr = State.hrScores[r.result_id];
-        if (!hr || !hr.perCompetence) return;
-        (r.competences || []).forEach(c => {
-            const hrPts = hr.perCompetence[c.competence_id];
-            if (typeof hrPts !== "number" || typeof c.points !== "number") return;
-            if (!comp[c.competence_id]) comp[c.competence_id] = { name: c.competence_name, sum: 0, n: 0 };
-            comp[c.competence_id].sum += Math.abs(hrPts - c.points);
-            comp[c.competence_id].n += 1;
-        });
+        const p = r.total_points;
+        if (typeof p !== "number") return;
+        const idx = Math.min(6, Math.max(0, Math.floor((p - 1) / 10)));
+        buckets[idx] += 1;
     });
-    const compIds = Object.keys(comp).map(Number).sort((a, b) => a - b);
-    const labels = compIds.map(cid => truncate(comp[cid].name || `ID ${cid}`, 26));
-    const values = compIds.map(cid => comp[cid].n ? comp[cid].sum / comp[cid].n : 0);
-    const counts = compIds.map(cid => comp[cid].n);
 
-    destroyChart("chartDiffByCompetence");
-    ChartRegistry["chartDiffByCompetence"] = new Chart(document.getElementById("chartDiffByCompetence"), {
+    destroyChart("chartHistogram");
+    ChartRegistry["chartHistogram"] = new Chart(document.getElementById("chartHistogram"), {
         type: "bar",
         data: {
             labels,
             datasets: [{
-                label: "Ø |Manager − HR|",
-                data: values.map(v => Number(v.toFixed(2))),
-                backgroundColor: values.map(v => v >= 3 ? "rgba(239,68,68,0.7)" : v >= 2 ? "rgba(245,158,11,0.7)" : "rgba(16,185,129,0.7)"),
+                label: "Kandidátů",
+                data: buckets,
+                backgroundColor: labels.map((_, i) => i < 2 ? "#ef4444" : i < 4 ? "#f59e0b" : i < 5 ? "#eab308" : "#22c55e"),
                 borderRadius: 6
             }]
         },
         options: {
-            indexAxis: "y",
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: { callbacks: { label: ctx => `${values[ctx.dataIndex].toFixed(2)} (n=${counts[ctx.dataIndex]})` } }
-            },
+            plugins: { legend: { display: false } },
             scales: {
-                x: { beginAtZero: true, suggestedMax: 6, grid: { color: "rgba(148,163,184,0.12)" }, ticks: { color: "#64748b" } },
-                y: { grid: { display: false }, ticks: { color: "#334155", font: { size: 11 } } }
+                x: { grid: { display: false }, ticks: { color: "#334155" } },
+                y: { beginAtZero: true, grid: { color: "rgba(148,163,184,0.12)" }, ticks: { color: "#64748b" } }
             }
         }
     });
 }
 
-// ── 11: Contested candidates table ───────────────
-function renderContestedTable(records) {
-    const rows = [];
-    records.forEach(r => {
-        const hr = State.hrScores[r.result_id];
-        if (!hr || !hr.perCompetence) return;
-        let maxDelta = 0;
-        let sumDelta = 0;
-        let n = 0;
-        (r.competences || []).forEach(c => {
-            const hrPts = hr.perCompetence[c.competence_id];
-            if (typeof hrPts !== "number" || typeof c.points !== "number") return;
-            const d = Math.abs(hrPts - c.points);
-            if (d > maxDelta) maxDelta = d;
-            sumDelta += d;
-            n++;
-        });
-        if (n > 0 && maxDelta >= 2) {
-            rows.push({ r, maxDelta, avgDelta: sumDelta / n });
-        }
-    });
-    rows.sort((a, b) => b.maxDelta - a.maxDelta || b.avgDelta - a.avgDelta);
-
-    const host = document.getElementById("contestedTable");
+// ── 11: Form stats table (quartiles + mean) ──────
+function renderFormStatsTable(records) {
+    const host = document.getElementById("formStatsTable");
     if (!host) return;
+
+    const byForm = {};
+    records.forEach(r => {
+        const f = r.form_name;
+        if (!f) return;
+        if (!byForm[f]) byForm[f] = [];
+        if (typeof r.total_points === "number") byForm[f].push(r.total_points);
+    });
+
+    const rows = Object.entries(byForm)
+        .map(([name, totals]) => {
+            const sorted = totals.slice().sort((a, b) => a - b);
+            return {
+                name,
+                n: sorted.length,
+                min: sorted[0] ?? 0,
+                q1: quantile(sorted, 0.25),
+                median: median(sorted),
+                q3: quantile(sorted, 0.75),
+                max: sorted[sorted.length - 1] ?? 0,
+                avg: sorted.reduce((a, b) => a + b, 0) / (sorted.length || 1)
+            };
+        })
+        .sort((a, b) => b.avg - a.avg);
+
     if (!rows.length) {
-        host.innerHTML = `<p style="color:var(--text-muted);font-size:13px;padding:8px;">Žádní sporní kandidáti — buď ještě chybí HR hodnocení, nebo se všichni shodují.</p>`;
+        host.innerHTML = `<p style="color:var(--text-muted);font-size:13px;padding:8px;">Žádná data.</p>`;
         return;
     }
-    const top = rows.slice(0, 10);
+
     host.innerHTML = `
         <table class="stats-table">
-            <thead><tr><th>#</th><th>Kandidát</th><th>Pozice</th><th class="num">Max ∆</th><th class="num">Ø ∆</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Pozice</th>
+                    <th class="num">N</th>
+                    <th class="num">Min</th>
+                    <th class="num">Q1</th>
+                    <th class="num">Med</th>
+                    <th class="num">Q3</th>
+                    <th class="num">Max</th>
+                    <th class="num">Ø</th>
+                </tr>
+            </thead>
             <tbody>
-                ${top.map((row, i) => `
+                ${rows.map(r => `
                     <tr>
-                        <td><span class="rank-badge">${i + 1}</span></td>
-                        <td><strong>${escapeHtml(row.r.candidate_fullname || "—")}</strong><div style="font-size:11px;color:var(--text-muted);">${escapeHtml(row.r.manager_name || "")} → HR</div></td>
-                        <td>${escapeHtml(row.r.catalog_position || "—")}</td>
-                        <td class="num"><span class="diff-badge ${diffClass(row.maxDelta)}">${row.maxDelta}</span></td>
-                        <td class="num">${row.avgDelta.toFixed(2)}</td>
+                        <td><strong>${escapeHtml(r.name)}</strong></td>
+                        <td class="num">${r.n}</td>
+                        <td class="num">${r.min}</td>
+                        <td class="num">${r.q1.toFixed(1)}</td>
+                        <td class="num">${r.median.toFixed(1)}</td>
+                        <td class="num">${r.q3.toFixed(1)}</td>
+                        <td class="num">${r.max}</td>
+                        <td class="num"><strong>${r.avg.toFixed(1)}</strong></td>
                     </tr>
                 `).join("")}
             </tbody>

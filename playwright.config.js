@@ -23,8 +23,9 @@ module.exports = defineConfig({
     }
   ],
   webServer: {
-    command: 'python -m http.server 4173',
-    url: 'http://127.0.0.1:4173/index.html',
+    // Serve from public/ to mirror the GH Pages layout (d-<slug>/ is at root).
+    command: 'python -m http.server 4173 --directory public',
+    url: 'http://127.0.0.1:4173/d-87a28b2d/',
     reuseExistingServer: true,
     timeout: 60000
   }

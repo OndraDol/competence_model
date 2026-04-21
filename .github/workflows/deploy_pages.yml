@@ -4,9 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'index.html'
-      - 'favicon.svg'
-      - 'assets/**'
+      - 'public/**'
       - '.github/workflows/deploy_pages.yml'
   workflow_dispatch:
 
@@ -32,9 +30,7 @@ jobs:
       - name: Stage site
         run: |
           mkdir -p _site
-          cp index.html _site/
-          cp favicon.svg _site/
-          cp -R assets _site/
+          cp -R public/. _site/
           touch _site/.nojekyll
 
       - name: Setup Pages

@@ -1,15 +1,13 @@
-name: Datacruit competence_models to Firebase Sync
+name: Datacruit competence_models sync
 
 on:
   schedule:
     # 07:00 UTC denně = 08:00 CET zimní / 09:00 CEST letní.
-    # Single cron pattern (stejně jako Vacancies) — GitHub Actions nepoužívá DST,
-    # takže jedna posunutá hodina v létě je akceptovatelný trade-off oproti duplicitním sync.
     - cron: '0 7 * * *'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: competence-model-sync
@@ -39,8 +37,7 @@ jobs:
         env:
           DATACRUIT_USERNAME: ${{ secrets.DATACRUIT_USERNAME }}
           DATACRUIT_PASSWORD: ${{ secrets.DATACRUIT_PASSWORD }}
-          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
-          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
         run: |
           set -uo pipefail
 
@@ -113,6 +110,20 @@ jobs:
           echo "attempt_count=$attempt_count" >> "$GITHUB_OUTPUT"
           echo "artifact_dir=$artifact_dir" >> "$GITHUB_OUTPUT"
           cat "$summary_path" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit updated encrypted blob
+        if: steps.sync.outputs.final_exit_code == '0'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/d-*/data.enc.json
+          if git diff --staged --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "chore: sync competence_models data ($(date -u '+%Y-%m-%dT%H:%M:%SZ'))"
+            git push origin HEAD:main
+          fi
 
       - name: Upload sync diagnostics artifact
         if: steps.sync.outputs.final_exit_code != '0'

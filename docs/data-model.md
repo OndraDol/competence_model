@@ -1,134 +1,127 @@
-# Datový model — Firebase Realtime Database
+# Datový model — `data.enc.json`
 
-Schéma RTDB pro Competence Model Dashboard.
+Šifrovaný JSON blob obsahuje celý snapshot datasetu `competence_models` z Datacruitu.
+Zapisuje ho `ats_sync.py` při každém běhu do `public/d-<slug>/data.enc.json` a frontend
+ho při loginu dešifruje pomocí WebCrypto (`assets/js/crypto.js`).
 
-## Top-level struktura
-
-```
-/meta
-/results/{result_id}
-/hrScores/{result_id}
-/hrScoreHistory/{result_id}/{autoId}
-/syncSnapshots/{uploadId}
-```
-
-## `/meta`
-
-Globální metadata. Zapisuje Python sync skript.
+## Struktura blobu
 
 ```json
 {
-  "lastSync": {
-    "uploadId": "20260421T070003Z",
-    "uploadedAt": "2026-04-21T07:00:03Z",
-    "source": "datacruit:competence_models",
+  "v": 1,
+  "algo": "AES-256-GCM-PBKDF2-SHA256",
+  "iter": 250000,
+  "salt": "<base64 32B>",
+  "iv": "<base64 12B>",
+  "ciphertext": "<base64>",
+  "syncedAt": "2026-04-21T07:00:03Z",
+  "datacruitFetchedAt": "2026-04-21T07:00:01Z",
+  "recordCount": 818,
+  "jsonRepairApplied": false
+}
+```
+
+### Nezašifrovaná pole (meta)
+
+Jsou viditelná každému, kdo si stáhne blob:
+
+| Pole | Účel |
+|---|---|
+| `v` | Verze formátu blobu (aktuálně `1`) |
+| `algo` | Identifikace šifrovacího schématu |
+| `iter` | PBKDF2 iterací — musí odpovídat frontend konstantě |
+| `salt` | Náhodný salt pro PBKDF2 (unique per sync) |
+| `iv` | Náhodný IV pro AES-GCM (unique per sync) |
+| `syncedAt` | Kdy byl sync dokončen (UI „Poslední sync" badge) |
+| `datacruitFetchedAt` | Kdy se stáhl dataset z Datacruitu |
+| `recordCount` | Počet záznamů (pro degradation guard příštího syncu) |
+| `jsonRepairApplied` | Jestli `fetch_data()` musel opravit Datacruit odpověď |
+
+Tato meta záměrně unencryped, protože:
+- UI potřebuje „Poslední sync" zobrazit i před dešifrováním
+- Další sync potřebuje `recordCount` ke kontrole degradace bez dešifrování
+
+### Zašifrovaná část (`ciphertext`)
+
+Po dešifrování:
+
+```json
+{
+  "records": [
+    {
+      "result_id": 1,
+      "interview_id": 5359982,
+      "interview_uuid": "d6770adf-0c81-4744-ba38-6abfdd49e02c",
+      "candidate_fullname": "Kotouček Tomáš",
+      "manager_name": "Jan Chadt",
+      "form_name": "Salesman",
+      "catalog_position": "Salesman - Senior",
+      "country": "Czech Republic",
+      "branch_name": "Česká Republika",
+      "client_branch_name": "Praha",
+      "system_company_branch_id": 10956,
+      "system_company_branch_name": "Česká Republika",
+      "date_filled": "2025-06-07",
+      "commentary": "...",
+      "total_points": 58,
+      "competences": [
+        { "competence_id": 1, "competence_name": "komunikační dovednosti", "points": 8 }
+      ]
+    }
+  ],
+  "meta": {
+    "syncedAt": "2026-04-21T07:00:03Z",
     "datacruitFetchedAt": "2026-04-21T07:00:01Z",
     "recordCount": 818,
     "jsonRepairApplied": false
-  },
-  "version": "1"
-}
-```
-
-## `/results/{result_id}`
-
-Jeden záznam = jedno kompetenční hodnocení z Datacruitu. Klíč = `result_id` (int z Datacruitu).
-Read-only pro frontend, přepisuje sync skript při každém běhu.
-
-```json
-{
-  "result_id": 1,
-  "interview_id": 5359982,
-  "interview_uuid": "d6770adf-0c81-4744-ba38-6abfdd49e02c",
-  "candidate_fullname": "Kotouček Tomáš",
-  "manager_name": "Jan Chadt",
-  "form_name": "Salesman",
-  "catalog_position": "Salesman - Senior",
-  "country": "Czech Republic",
-  "branch_name": "Česká Republika",
-  "client_branch_name": "Praha",
-  "system_company_branch_id": 10956,
-  "system_company_branch_name": "Česká Republika",
-  "date_filled": "2025-06-07",
-  "commentary": "Komentář: mzda OK...",
-  "total_points": 58,
-  "competences": [
-    { "competence_id": 1, "competence_name": "komunikační dovednosti", "points": 8 },
-    { "competence_id": 2, "competence_name": "orientace na zákazníka", "points": 8 }
-  ]
-}
-```
-
-Pole `competences` je manažerovo hodnocení (zdrojem je Datacruit).
-
-## `/hrScores/{result_id}`
-
-Paralelní hodnocení HR konzultanta k existujícímu kandidátovi. Klíč odpovídá `result_id`.
-Zapisuje frontend přímo.
-
-```json
-{
-  "perCompetence": { "1": 7, "2": 8, "3": 6, "4": 9, "5": 7, "6": 8, "7": 8 },
-  "commentary": "Souhlasím s managerem, ale komunikaci bych dal níž.",
-  "totalPoints": 53,
-  "updatedBy": "jan.novak@aures.cz",
-  "updatedAt": "2026-04-21T08:12:33.512Z"
-}
-```
-
-- **Klíče `perCompetence`** jsou string verze `competence_id` (RTDB neumí numerické klíče).
-- **`totalPoints`** je odvozené — klient ho vypočítá a zapíše jako součást zápisu.
-- Záznam chybí = HR ještě neohodnotil.
-
-## `/hrScoreHistory/{result_id}/{autoId}`
-
-Append-only audit log. Každá úprava `hrScores/{result_id}` vytvoří nový `autoId`
-(Firebase `push()` key) se snapshotem před změnou.
-
-```json
-{
-  "perCompetence": { "1": 6, "2": 8, ... },
-  "commentary": "...",
-  "totalPoints": 52,
-  "updatedBy": "jan.novak@aures.cz",
-  "updatedAt": "2026-04-21T08:11:02.113Z"
-}
-```
-
-Nezapisuje se pro první vytvoření (prázdný → nová hodnota) — jen pro přepisy existujícího
-záznamu.
-
-## `/syncSnapshots/{uploadId}`
-
-Historické snapshoty celého datasetu pro rollback. Klíč = `uploadId` ve formátu
-`YYYYMMDDTHHmmssZ`.
-
-```json
-{
-  "results": { "1": { ... }, "2": { ... } },
-  "meta": {
-    "uploadedAt": "2026-04-21T07:00:03Z",
-    "recordCount": 818
   }
 }
 ```
 
-Cleanup skript maže snapshoty starší než 14 dní (kromě posledního).
+`records` je 1:1 kopie struktury z Datacruit API bez transformací.
 
-## Indexy
+## Šifrování (Python → JS round-trip)
 
-V `/results` doporučené `.indexOn` (v security-rules.md):
-- `date_filled` — default sort, filtr období
-- `country` — country switch
-- `form_name` — filtr pozice
-- `manager_name` — filtr manažera
-- `system_company_branch_name` — filtr pobočky
+### Python (`ats_sync.py`)
 
-## Velikostní odhad
+1. `salt = secrets.token_bytes(32)` — random 32 bajtů
+2. `iv = secrets.token_bytes(12)` — random 12 bajtů (AES-GCM standard)
+3. `key = PBKDF2HMAC(SHA256, 250_000 iter, salt).derive(password.encode())` → 32 bajtů
+4. `ciphertext = AESGCM(key).encrypt(iv, json.dumps({records, meta}).encode(), aad=None)`
+5. Výstup jako base64 trojice (`salt`, `iv`, `ciphertext`) v JSON blobu
 
-- 818 záznamů × ~1,5 KB = ~1,2 MB `/results`
-- HR scores: 818 × ~0,5 KB = ~400 KB při 100% pokrytí
-- History: ~1 KB per zápis, při 10 úpravách per kandidát = ~8 MB
-- Snapshoty: 1,2 MB per snapshot × 14 dní (denní cron) = ~17 MB
+### JavaScript (`assets/js/crypto.js`)
 
-Celkový footprint při plném využití: ~30 MB, hluboko pod 10 GB free tier limit Spark planu.
+Zrcadlově používá WebCrypto SubtleCrypto API:
+
+```js
+const baseKey = await crypto.subtle.importKey("raw", encoder.encode(password),
+    { name: "PBKDF2" }, false, ["deriveKey"]);
+const aesKey = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 250000, hash: "SHA-256" },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false, ["decrypt"]);
+const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, ciphertext);
+```
+
+AES-GCM má built-in autentikaci — špatné heslo nebo upravený ciphertext → throw.
+
+## Integritní záruky
+
+- **Tamper-evident:** AES-GCM tag = 128 bitů MAC nad ciphertextem. Jakákoli modifikace
+  (včetně `ciphertext` i `iv`) způsobí selhání decryptu.
+- **Unique IV per sync:** random 12B IV zaručuje, že dvě identické datasety po dvou
+  syncích mají úplně jiný ciphertext. Rovněž chrání proti replay útokům.
+- **Unique salt per sync:** PBKDF2 klíč se odvozuje pokaždé z jiného saltu, takže kompromitace
+  jednoho klíče neovlivňuje ostatní syncy.
+
+## Limitace
+
+- **Data jsou veřejně stažitelná** (public repo + GH Pages). Obrana je pouze na úrovni
+  šifrování — pokud unikne `DASHBOARD_PASSWORD`, úniknou i všechna data.
+- **Šifrování neřeší per-user přístup.** Každý uživatel s heslem má přístup ke všem datům.
+- **Kontrola přístupu neexistuje v čase:** jakmile stáhneš blob, můžeš ho uchovat
+  lokálně a dešifrovat kdykoli později (dokud platí heslo).
+
+Pro silnější model použij Firebase Auth nebo Auth0 + read-only API.

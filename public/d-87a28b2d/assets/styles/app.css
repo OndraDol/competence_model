@@ -615,87 +615,8 @@ html[data-theme="dark"] .loading-overlay { background: rgba(2, 6, 23, 0.9); }
     background: var(--brand-500);
     transition: width 240ms ease;
 }
-.score-bar-fill.manager { background: var(--text-secondary); }
-.score-bar-fill.hr { background: var(--brand-500); }
+.score-bar-fill.manager { background: var(--brand-500); }
 .score-value { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
-
-.hr-score-input {
-    width: 68px;
-    padding: 6px 8px;
-    font-size: 13px;
-    font-weight: 700;
-    text-align: center;
-    color: var(--text-primary);
-    background: var(--surface-warm);
-    border: 1px solid var(--border-medium);
-    border-radius: var(--radius-sm);
-    outline: none;
-    transition: all 160ms ease;
-    font-variant-numeric: tabular-nums;
-}
-.hr-score-input:focus {
-    border-color: var(--brand-400);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
-}
-.hr-score-input.empty { color: var(--text-muted); }
-
-.diff-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 2px 8px;
-    font-size: 11px;
-    font-weight: 700;
-    border-radius: 999px;
-    letter-spacing: 0.02em;
-    font-variant-numeric: tabular-nums;
-}
-.diff-badge.diff-zero { color: var(--text-muted); background: var(--surface-subtle); }
-.diff-badge.diff-low  { color: var(--text-secondary); background: var(--surface-subtle); }
-.diff-badge.diff-med  { color: #92400e; background: rgba(245, 158, 11, 0.16); }
-.diff-badge.diff-high { color: #991b1b; background: rgba(239, 68, 68, 0.16); }
-html[data-theme="dark"] .diff-badge.diff-med  { color: #fcd34d; background: rgba(245, 158, 11, 0.18); }
-html[data-theme="dark"] .diff-badge.diff-high { color: #fca5a5; background: rgba(239, 68, 68, 0.2); }
-
-.hr-commentary {
-    width: 100%;
-    min-height: 80px;
-    padding: 12px 14px;
-    font-size: 13px;
-    color: var(--text-primary);
-    background: var(--surface-warm);
-    border: 1px solid var(--border-medium);
-    border-radius: var(--radius-md);
-    outline: none;
-    resize: vertical;
-    font-family: inherit;
-    line-height: 1.5;
-    transition: all 160ms ease;
-}
-.hr-commentary:focus {
-    border-color: var(--brand-400);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
-}
-
-.detail-meta {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border-light);
-    font-size: 11px;
-    color: var(--text-muted);
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-    align-items: center;
-}
-.detail-meta .meta-saving {
-    color: var(--brand-500);
-    font-weight: 600;
-}
-.detail-meta .meta-saved {
-    color: var(--accent-ok);
-    font-weight: 600;
-}
 
 .manager-commentary-panel {
     padding: 12px 14px;

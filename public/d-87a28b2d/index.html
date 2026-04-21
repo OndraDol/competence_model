@@ -3,18 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AURES Competence Model</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+    <meta name="referrer" content="no-referrer">
+    <meta name="googlebot" content="noindex, nofollow">
+    <title>Report</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@0.344.0"></script>
-
-    <!-- Firebase v10 SDKs (compat mode — global firebase object) -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-
-    <!-- Chart.js for statistics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -23,20 +19,17 @@
 
 <body class="flex flex-col h-screen">
 
-    <!-- Login Overlay -->
+    <!-- Password gate -->
     <div id="loginOverlay" style="display: none;">
         <div class="login-card">
-            <div class="upload-icon-wrap">
-                <i data-lucide="lock"></i>
-            </div>
+            <div class="upload-icon-wrap"><i data-lucide="lock"></i></div>
             <h2 class="upload-title">AURES Competence Model</h2>
-            <p class="upload-desc">Přihlaste se pracovním e-mailem a heslem. Přístup mají jen účty, které byly předem zřízené správcem.</p>
-            <input type="email" id="loginEmail" class="login-input" placeholder="jmeno.prijmeni@aures..."
-                   onkeydown="if(event.key === 'Enter') document.getElementById('loginPassword').focus()">
-            <input type="password" id="loginPassword" class="login-input" placeholder="Vaše heslo (min. 6 znaků)"
-                   onkeydown="if(event.key === 'Enter') handleLogin()">
-            <button id="loginBtn" onclick="handleLogin()" class="btn-primary-upload">Přihlásit se</button>
-            <p class="login-help">Účet i heslo jsou přidělené správcem. Pokud je nemáte, web vás sám nezaregistruje.</p>
+            <p class="upload-desc">Zadejte přístupové heslo pro zobrazení dashboardu.</p>
+            <input type="password" id="loginPassword" class="login-input" placeholder="Heslo"
+                   autocomplete="current-password"
+                   onkeydown="if(event.key === 'Enter') handleUnlock()">
+            <button id="loginBtn" onclick="handleUnlock()" class="btn-primary-upload">Odemknout</button>
+            <p class="login-help">Heslo je sdílené v týmu. Pokud ho neznáte, obraťte se na správce.</p>
             <p id="loginError" class="login-error"></p>
         </div>
     </div>
@@ -51,11 +44,7 @@
             </div>
             <div class="logo-text">
                 <div class="logo-title">AURES <span>Competence Model</span></div>
-                <div id="lastUpdatedText" class="last-updated">Poslední sync: načítání…</div>
-                <div id="firebaseStatus" class="firebase-status loading" title="Firebase: načítání">
-                    <span class="firebase-status-dot" aria-hidden="true"></span>
-                    <span id="firebaseStatusLabel">Firebase: načítání</span>
-                </div>
+                <div id="lastUpdatedText" class="last-updated">Poslední sync: —</div>
             </div>
         </div>
 
@@ -68,7 +57,6 @@
                 <button id="nav-btn-ALL" onclick="setGlobalCountry('ALL')" class="country-btn">All</button>
             </div>
 
-            <!-- Global search -->
             <div class="search-wrap">
                 <i data-lucide="search" class="search-icon"></i>
                 <input type="text" id="globalSearch" placeholder="Hledat kandidáta, manažera, pobočku…"
@@ -85,54 +73,40 @@
                 <i data-lucide="moon" class="w-4 h-4"></i>
                 <span class="theme-toggle-label">Dark</span>
             </button>
-            <button onclick="handleLogout()" id="logoutBtn" class="btn-upload hidden">
-                <i data-lucide="log-out" class="w-4 h-4"></i> <span>Odhlásit</span>
+            <button onclick="lockDashboard()" id="lockBtn" class="btn-upload hidden">
+                <i data-lucide="lock" class="w-4 h-4"></i> <span>Zamknout</span>
             </button>
         </div>
     </header>
 
     <!-- Main content -->
     <main class="app-main">
-        <!-- Loading overlay -->
-        <div id="loadingOverlay" class="loading-overlay">
+        <div id="loadingOverlay" class="loading-overlay" style="display: none;">
             <div class="loader"></div>
-            <h2 id="loadingTitle">Načítání dat z Firebase…</h2>
-            <p id="loadingDescription">Získáváme kompetenční modely z cloudu</p>
+            <h2 id="loadingTitle">Načítání…</h2>
         </div>
 
         <!-- Dashboard view -->
         <div id="dashboardView" class="view-container hidden">
             <div class="view-inner">
-                <!-- KPI row -->
-                <div class="kpi-grid" id="kpiGrid">
-                    <!-- KPI cards rendered by stats/dashboard module -->
-                </div>
+                <div class="kpi-grid" id="kpiGrid"></div>
 
-                <!-- Filter bar -->
                 <div class="filter-bar" id="filterBar">
                     <div class="filter-group">
                         <label>Pozice</label>
-                        <select id="filterForm" onchange="handleFilterChange()">
-                            <option value="ALL">Vše</option>
-                        </select>
+                        <select id="filterForm" onchange="handleFilterChange()"><option value="ALL">Vše</option></select>
                     </div>
                     <div class="filter-group">
                         <label>Katalog</label>
-                        <select id="filterCatalog" onchange="handleFilterChange()">
-                            <option value="ALL">Vše</option>
-                        </select>
+                        <select id="filterCatalog" onchange="handleFilterChange()"><option value="ALL">Vše</option></select>
                     </div>
                     <div class="filter-group">
                         <label>Pobočka</label>
-                        <select id="filterBranch" onchange="handleFilterChange()">
-                            <option value="ALL">Vše</option>
-                        </select>
+                        <select id="filterBranch" onchange="handleFilterChange()"><option value="ALL">Vše</option></select>
                     </div>
                     <div class="filter-group">
                         <label>Manažer</label>
-                        <select id="filterManager" onchange="handleFilterChange()">
-                            <option value="ALL">Vše</option>
-                        </select>
+                        <select id="filterManager" onchange="handleFilterChange()"><option value="ALL">Vše</option></select>
                     </div>
                     <div class="filter-group" id="filterCountryGroup" style="display: none;">
                         <label>Země</label>
@@ -143,20 +117,11 @@
                             <option value="Poland">Poland</option>
                         </select>
                     </div>
-                    <div class="filter-group filter-hr-only">
-                        <label>HR hodnocení</label>
-                        <select id="filterHrStatus" onchange="handleFilterChange()">
-                            <option value="ALL">Vše</option>
-                            <option value="WITH">Vyplněno</option>
-                            <option value="WITHOUT">Nevyplněno</option>
-                        </select>
-                    </div>
                     <button class="filter-reset-btn" onclick="resetFilters()" title="Resetovat filtry">
                         <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset
                     </button>
                 </div>
 
-                <!-- Candidates table -->
                 <div id="candidatesContainer"></div>
             </div>
         </div>
@@ -173,12 +138,11 @@
     <div id="toast" class="toast" style="display:none;"></div>
 
     <!-- JS modules (order matters) -->
+    <script src="assets/js/crypto.js"></script>
     <script src="assets/js/core.js"></script>
-    <script src="assets/js/auth.js"></script>
     <script src="assets/js/dashboard.js"></script>
     <script src="assets/js/stats.js"></script>
     <script>
-        // Re-initialize Lucide icons whenever content changes.
         document.addEventListener('DOMContentLoaded', () => {
             if (window.lucide) lucide.createIcons();
         });
