@@ -39,7 +39,8 @@ DC_USER = os.environ.get("DATACRUIT_USERNAME")
 DC_PASS = os.environ.get("DATACRUIT_PASSWORD")
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD")
 
-DASHBOARD_BLOB_GLOB = "public/d-*/data.enc.json"
+DASHBOARD_DIR_GLOB = "public/d-*"
+DASHBOARD_BLOB_NAME = "data.enc.json"
 
 HTTP_TIMEOUT_SECONDS = 60
 
@@ -250,20 +251,20 @@ def validate_runtime_configuration() -> None:
 
 
 def find_blob_path() -> Path:
-    matches = sorted(glob.glob(DASHBOARD_BLOB_GLOB))
-    if not matches:
+    dirs = sorted(d for d in glob.glob(DASHBOARD_DIR_GLOB) if os.path.isdir(d))
+    if not dirs:
         raise SyncAbort(
             SYNC_STATUS_HARD_FAILURE,
-            reasons=[f"No dashboard directory matches {DASHBOARD_BLOB_GLOB}"],
+            reasons=[f"No dashboard directory matches {DASHBOARD_DIR_GLOB}"],
             error="Dashboard directory (public/d-<slug>/) not found",
         )
-    if len(matches) > 1:
+    if len(dirs) > 1:
         raise SyncAbort(
             SYNC_STATUS_HARD_FAILURE,
-            reasons=[f"Multiple dashboard directories match {DASHBOARD_BLOB_GLOB}: {matches}"],
+            reasons=[f"Multiple dashboard directories match {DASHBOARD_DIR_GLOB}: {dirs}"],
             error="Expected exactly one public/d-<slug>/ directory",
         )
-    return Path(matches[0])
+    return Path(dirs[0]) / DASHBOARD_BLOB_NAME
 
 
 def read_previous_meta(path: Path) -> dict | None:
