@@ -7,6 +7,12 @@ on:
       - 'public/**'
       - '.github/workflows/deploy_pages.yml'
   workflow_dispatch:
+  # Deploy automaticky po úspěšném sync workflow (commit bot-identity jinak
+  # netriggeruje push event). Použití workflow_run je pro tento scénář standardní.
+  workflow_run:
+    workflows: ["Datacruit competence_models sync"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
@@ -19,6 +25,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Pokud jsme spuštěni jako reakce na sync workflow, nasazuj jen pokud sync uspěl.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -26,6 +34,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Stage site
         run: |
