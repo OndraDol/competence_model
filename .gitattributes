@@ -1,0 +1,9 @@
+# Enforce LF line endings for text files (prevents IndentationError on Linux GitHub Actions runner)
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.js text eol=lf
+*.css text eol=lf

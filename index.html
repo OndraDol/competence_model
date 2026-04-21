@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Competence Model Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="assets/styles/app.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Competence Model</h1>
+    <p class="subtitle">Crosscheck výsledků z Datacruit API proti modelu konzultantů</p>
+  </header>
+
+  <main id="app">
+    <section id="status" class="panel">
+      <h2>Stav</h2>
+      <p id="last-updated">Načítání…</p>
+    </section>
+
+    <section id="results" class="panel">
+      <h2>Výsledky kompetenčního modelu</h2>
+      <div id="results-container"></div>
+    </section>
+
+    <section id="crosscheck" class="panel">
+      <h2>Crosscheck s modelem konzultantů</h2>
+      <div id="crosscheck-container"></div>
+    </section>
+  </main>
+
+  <script src="assets/js/core.js"></script>
+  <script src="assets/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "aures-competence-model-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "test:browser-smoke": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.2"
+  }
+}

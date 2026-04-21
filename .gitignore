@@ -1,0 +1,27 @@
+# Excel / CSV data files - never commit raw reports
+*.xlsx
+*.xls
+*.csv
+.worktrees/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.env
+backup-output/
+.backup-output/
+
+# Node / Browser tests
+node_modules/
+playwright-report/
+test-results/
+.playwright-artifacts/
+.playwright-mcp/
+
+# Firebase credentials
+firebase-credentials.json
+serviceAccount*.json

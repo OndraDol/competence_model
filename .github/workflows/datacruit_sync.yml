@@ -1,0 +1,43 @@
+name: Datacruit to Firebase Sync
+
+on:
+  schedule:
+    # Mondays, Thursdays, Fridays. 04:00 UTC.
+    - cron: '0 4 * * 1,4,5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: datacruit-sync
+  cancel-in-progress: false
+
+jobs:
+  sync_data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run sync
+        env:
+          DATACRUIT_USERNAME: ${{ secrets.DATACRUIT_USERNAME }}
+          DATACRUIT_PASSWORD: ${{ secrets.DATACRUIT_PASSWORD }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+        run: |
+          # TODO: vytvořit ats_sync.py podle vzoru Vacancies repa
+          echo "Sync skript zatím není implementován"
+          exit 0
