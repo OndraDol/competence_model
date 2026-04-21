@@ -86,23 +86,31 @@
             <h2 id="loadingTitle">Načítání…</h2>
         </div>
 
-        <!-- Dashboard view -->
-        <div id="dashboardView" class="view-container hidden">
+        <!-- Global filter bar (above both views) -->
+        <div id="globalFilterBar" class="filter-bar-global hidden">
             <div class="view-inner">
-                <div class="kpi-grid" id="kpiGrid"></div>
-
-                <div class="filter-bar" id="filterBar">
+                <div class="filter-bar">
+                    <div class="filter-group filter-group-time">
+                        <label>Období</label>
+                        <div class="time-period-nav" id="timePeriodNav">
+                            <button id="time-btn-ALL" class="time-btn active" onclick="handleTimePeriodChange('ALL')">Vše</button>
+                            <button id="time-btn-7D" class="time-btn" onclick="handleTimePeriodChange('7D')">7 dní</button>
+                            <button id="time-btn-30D" class="time-btn" onclick="handleTimePeriodChange('30D')">30 dní</button>
+                            <button id="time-btn-90D" class="time-btn" onclick="handleTimePeriodChange('90D')">90 dní</button>
+                            <button id="time-btn-YEAR" class="time-btn" onclick="handleTimePeriodChange('YEAR')">Tento rok</button>
+                        </div>
+                    </div>
                     <div class="filter-group">
-                        <label>Pozice</label>
+                        <label>Oddělení</label>
                         <select id="filterForm" onchange="handleFilterChange()"><option value="ALL">Vše</option></select>
                     </div>
                     <div class="filter-group">
-                        <label>Katalog</label>
+                        <label>Pozice</label>
                         <select id="filterCatalog" onchange="handleFilterChange()"><option value="ALL">Vše</option></select>
                     </div>
                     <div class="filter-group">
-                        <label>Pobočka</label>
-                        <select id="filterBranch" onchange="handleFilterChange()"><option value="ALL">Vše</option></select>
+                        <label>Město</label>
+                        <select id="filterCity" onchange="handleFilterChange()"><option value="ALL">Vše</option></select>
                     </div>
                     <div class="filter-group">
                         <label>Manažer</label>
@@ -117,11 +125,17 @@
                             <option value="Poland">Poland</option>
                         </select>
                     </div>
-                    <button class="filter-reset-btn" onclick="resetFilters()" title="Resetovat filtry">
+                    <button class="filter-reset-btn" onclick="resetFilters()" title="Resetovat všechny filtry">
                         <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset
                     </button>
                 </div>
+            </div>
+        </div>
 
+        <!-- Dashboard view -->
+        <div id="dashboardView" class="view-container hidden">
+            <div class="view-inner">
+                <div class="kpi-grid" id="kpiGrid"></div>
                 <div id="candidatesContainer"></div>
             </div>
         </div>

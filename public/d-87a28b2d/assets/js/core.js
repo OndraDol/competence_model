@@ -15,9 +15,10 @@ const State = {
     meta: null,            // { syncedAt, datacruitFetchedAt, recordCount, jsonRepairApplied }
     globalCountry: "ALL",  // CZ | SK | PL | ALL (persisted)
     filters: {
-        form: "ALL",
-        catalog: "ALL",
-        branch: "ALL",
+        timePeriod: "ALL", // ALL | 7D | 30D | 90D | YEAR
+        form: "ALL",       // form_name = oddělení
+        catalog: "ALL",    // catalog_position
+        city: "ALL",       // client_branch_name
         manager: "ALL",
         country: "ALL"
     },
@@ -26,6 +27,14 @@ const State = {
     currentView: "dashboard",
     unlocked: false
 };
+
+const TIME_PERIOD_OPTIONS = [
+    { value: "ALL",  label: "Vše" },
+    { value: "7D",   label: "7 dní" },
+    { value: "30D",  label: "30 dní" },
+    { value: "90D",  label: "90 dní" },
+    { value: "YEAR", label: "Tento rok" }
+];
 
 // ── Persistence helpers ──────────────────────────
 const STORAGE_KEY_COUNTRY = "cm.globalCountry";
@@ -65,21 +74,34 @@ function setGlobalCountry(code) {
 function handleFilterChange() {
     State.filters.form = document.getElementById("filterForm").value;
     State.filters.catalog = document.getElementById("filterCatalog").value;
-    State.filters.branch = document.getElementById("filterBranch").value;
+    State.filters.city = document.getElementById("filterCity").value;
     State.filters.manager = document.getElementById("filterManager").value;
     const cEl = document.getElementById("filterCountry");
     State.filters.country = cEl ? cEl.value : "ALL";
     rerenderAll();
 }
 
+function handleTimePeriodChange(period) {
+    State.filters.timePeriod = period;
+    TIME_PERIOD_OPTIONS.forEach(opt => {
+        const btn = document.getElementById(`time-btn-${opt.value}`);
+        if (btn) btn.classList.toggle("active", opt.value === period);
+    });
+    rerenderAll();
+}
+
 function resetFilters() {
-    State.filters = { form: "ALL", catalog: "ALL", branch: "ALL", manager: "ALL", country: "ALL" };
+    State.filters = { timePeriod: "ALL", form: "ALL", catalog: "ALL", city: "ALL", manager: "ALL", country: "ALL" };
     State.search = "";
     const search = document.getElementById("globalSearch");
     if (search) search.value = "";
-    ["filterForm", "filterCatalog", "filterBranch", "filterManager", "filterCountry"].forEach(id => {
+    ["filterForm", "filterCatalog", "filterCity", "filterManager", "filterCountry"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = "ALL";
+    });
+    TIME_PERIOD_OPTIONS.forEach(opt => {
+        const btn = document.getElementById(`time-btn-${opt.value}`);
+        if (btn) btn.classList.toggle("active", opt.value === "ALL");
     });
     rerenderAll();
 }
@@ -119,9 +141,23 @@ function applyFilters(record) {
     const f = State.filters;
     if (f.form !== "ALL" && record.form_name !== f.form) return false;
     if (f.catalog !== "ALL" && record.catalog_position !== f.catalog) return false;
-    if (f.branch !== "ALL" && record.system_company_branch_name !== f.branch) return false;
+    if (f.city !== "ALL" && record.client_branch_name !== f.city) return false;
     if (f.manager !== "ALL" && record.manager_name !== f.manager) return false;
     if (State.globalCountry === "ALL" && f.country !== "ALL" && record.country !== f.country) return false;
+    return true;
+}
+
+function applyTimePeriod(record) {
+    const period = State.filters.timePeriod;
+    if (period === "ALL" || !record.date_filled) return period === "ALL";
+    const now = Date.now();
+    const filledAt = new Date(record.date_filled).getTime();
+    if (!Number.isFinite(filledAt)) return false;
+    const DAY = 24 * 3600 * 1000;
+    if (period === "7D")   return (now - filledAt) <= 7 * DAY;
+    if (period === "30D")  return (now - filledAt) <= 30 * DAY;
+    if (period === "90D")  return (now - filledAt) <= 90 * DAY;
+    if (period === "YEAR") return new Date(record.date_filled).getFullYear() === new Date().getFullYear();
     return true;
 }
 
@@ -129,6 +165,7 @@ function getFilteredResults() {
     const needle = State.search;
     return getAllResultsArray()
         .filter(r => applyCountry(r))
+        .filter(r => applyTimePeriod(r))
         .filter(r => applyFilters(r))
         .filter(r => matchesSearch(r, needle));
 }
@@ -167,7 +204,7 @@ function updateLastUpdatedBadge() {
 }
 
 function revealShell() {
-    ["dashboardBtn", "statsBtn", "lockBtn"].forEach(id => {
+    ["dashboardBtn", "statsBtn", "lockBtn", "globalFilterBar"].forEach(id => {
         const b = document.getElementById(id);
         if (b) b.classList.remove("hidden");
     });
@@ -179,7 +216,7 @@ function lockDashboard() {
     State.meta = null;
     State.unlocked = false;
     showPasswordGate();
-    ["dashboardBtn", "statsBtn", "lockBtn"].forEach(id => {
+    ["dashboardBtn", "statsBtn", "lockBtn", "globalFilterBar"].forEach(id => {
         const b = document.getElementById(id);
         if (b) b.classList.add("hidden");
     });
@@ -199,7 +236,7 @@ function populateFilterDropdowns() {
     };
     fill("filterForm", uniqueSorted(records.map(r => r.form_name)));
     fill("filterCatalog", uniqueSorted(records.map(r => r.catalog_position)));
-    fill("filterBranch", uniqueSorted(records.map(r => r.system_company_branch_name)));
+    fill("filterCity", uniqueSorted(records.map(r => r.client_branch_name)));
     fill("filterManager", uniqueSorted(records.map(r => r.manager_name)));
 }
 

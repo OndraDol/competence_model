@@ -102,12 +102,12 @@ function getHeaderCells() {
     const cols = [
         { key: "candidate_fullname", label: "Kandidát" },
         ...(State.globalCountry === "ALL" ? [{ key: "country", label: "Země" }] : []),
-        { key: "form_name", label: "Form" },
+        { key: "form_name", label: "Oddělení" },
         { key: "catalog_position", label: "Pozice" },
-        { key: "system_company_branch_name", label: "Pobočka" },
+        { key: "client_branch_name", label: "Město" },
         { key: "manager_name", label: "Manažer" },
         { key: "date_filled", label: "Datum" },
-        { key: "total_points", label: "Total" }
+        { key: "total_points", label: "Skóre" }
     ];
     return cols;
 }
@@ -153,12 +153,12 @@ function renderCandidateRow(r, template) {
              onclick="toggleCandidateExpand('${escapeHtml(String(r.result_id))}')">
             <div>
                 <div class="candidate-name">${escapeHtml(r.candidate_fullname || "—")}</div>
-                <div class="candidate-sub">${escapeHtml(r.client_branch_name || "")}</div>
+                <div class="candidate-sub">${escapeHtml(r.branch_name || "")}</div>
             </div>
             ${countryPill}
             <div>${escapeHtml(r.form_name || "—")}</div>
             <div>${escapeHtml(r.catalog_position || "—")}</div>
-            <div>${escapeHtml(r.system_company_branch_name || "—")}</div>
+            <div>${escapeHtml(r.client_branch_name || "—")}</div>
             <div>${escapeHtml(r.manager_name || "—")}</div>
             <div>${escapeHtml(r.date_filled || "—")}</div>
             <div class="score-cell" style="text-align:right;color:var(--brand-600);">${r.total_points ?? "—"}</div>

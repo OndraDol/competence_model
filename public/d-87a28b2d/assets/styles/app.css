@@ -445,6 +445,45 @@ html[data-theme="dark"] .loading-overlay { background: rgba(2, 6, 23, 0.9); }
 }
 .kpi-sub { margin-top: 4px; font-size: 12px; color: var(--text-muted); font-weight: 500; }
 
+/* ── Global filter bar (sticky above views) ── */
+.filter-bar-global {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: 12px 28px 4px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-light);
+}
+html[data-theme="dark"] .filter-bar-global { background: var(--surface); }
+
+/* ── Time period pill nav ──────────────────── */
+.filter-group-time { min-width: auto; }
+.time-period-nav {
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    background: var(--surface-subtle);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+}
+.time-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    transition: all 160ms ease;
+    white-space: nowrap;
+}
+.time-btn:hover { color: var(--brand-600); background: var(--surface-warm); }
+.time-btn.active {
+    color: #fff;
+    background: var(--brand-600);
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
 /* ── Filter bar ──────────────────────────── */
 .filter-bar {
     display: flex;
@@ -682,6 +721,75 @@ html[data-theme="dark"] .loading-overlay { background: rgba(2, 6, 23, 0.9); }
     height: 280px !important;
 }
 .stats-card.card-tall .stats-chart-canvas { height: 360px !important; }
+
+/* ── Competence × Oddělení heatmapa ───────── */
+.competence-heatmap {
+    overflow-x: auto;
+}
+.heatmap-grid {
+    display: grid;
+    gap: 4px;
+    min-width: 100%;
+    font-size: 12px;
+}
+.heatmap-corner {
+    background: transparent;
+}
+.heatmap-col-head {
+    padding: 10px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--surface-subtle);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+.heatmap-row-head {
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--surface-subtle);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.heatmap-cell {
+    padding: 10px 8px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--text-primary);
+    transition: transform 120ms ease;
+}
+.heatmap-cell:hover { transform: scale(1.04); }
+.heatmap-cell.heatmap-empty {
+    color: var(--text-muted);
+    background: var(--surface-subtle);
+    font-weight: 500;
+}
+.heatmap-value {
+    font-weight: 800;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+}
+.heatmap-count {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+html[data-theme="dark"] .heatmap-cell:not(.heatmap-empty) {
+    color: #0f172a;
+}
 
 .stats-table {
     width: 100%;
