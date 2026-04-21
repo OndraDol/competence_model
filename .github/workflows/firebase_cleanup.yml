@@ -1,0 +1,47 @@
+name: Firebase Cleanup Old Snapshots
+
+on:
+  schedule:
+    # Mondays 03:30 UTC
+    - cron: '30 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      max_age_days:
+        description: 'Maximum snapshot age in days (default 14)'
+        required: false
+        default: '14'
+      dry_run:
+        description: 'Dry run only (true/false)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run cleanup
+        env:
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+        run: |
+          args="--max-age-days ${{ github.event.inputs.max_age_days || '14' }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            args="$args --dry-run"
+          fi
+          python scripts/firebase_cleanup_old_snapshots.py $args

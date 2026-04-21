@@ -1,53 +1,119 @@
 # Competence Model Dashboard
 
-Webový dashboard pro ukládání a vyhodnocování výsledků kompetenčního modelu z Datacruit API
-a jejich crosscheck s kompetenčním modelem konzultantů. Data se ukládají do Firebase Realtime
-Database, čelní strana je statický HTML/JS dashboard hostovaný přímo z repa.
+Webový dashboard pro kompetenční modely z Datacruit API. Zobrazuje výsledky hodnocení
+kandidátů (manažerovo skóre) a umožňuje HR konzultantovi vyplnit paralelní hodnocení.
+Dashboard počítá rozdíly, filtruje, a poskytuje sadu HR analytik.
+
+Inspirováno architekturou a vizuálem [AURES Vacancies](https://github.com/OndraDol/vacancies)
+— stejný design system, stejní uživatelé.
+
+## Klíčové vlastnosti
+
+- Kandidátský list s inline editací HR skóre 1–10 pro každou kompetenci
+- Přepínač zemí CZ / SK / PL / **All**; v režimu All lze filtrovat podle země
+- Filtry: pozice (`form_name`), katalog, pobočka, manažer, stav HR hodnocení
+- Globální hledání podle jména kandidáta, manažera, pobočky
+- Vizualizace rozdílu manažer ↔ HR (barevné badge, graf průměrné odchylky per kompetence)
+- Sekce statistik: 6 KPI + 11 grafů/tabulek (TOP/BOTTOM kandidáti, průměry per pozice/pobočka/manažer/klient, distribuce bodů per kompetence, trend v čase, srovnání zemí, contested kandidáti)
+- Firebase Auth (email/password) — identita je logována u každého HR zápisu
+- Automatický denní sync z Datacruit API v 07:00 UTC (GitHub Actions)
+- Historie zálohování + cleanup starých snapshotů
 
 ## Stack
 
-- **Frontend:** statické HTML + vanilla JS (`index.html`, `assets/`)
-- **Backend sync:** Python skripty (Datacruit REST API → Firebase RTDB)
-- **Databáze:** Firebase Realtime Database
-- **Automatizace:** GitHub Actions (pravidelný sync, zálohy)
-- **Testy:** Playwright (browser smoke), pytest (Python)
+| Vrstva | Technologie |
+|---|---|
+| Frontend | Static HTML + vanilla JS, Tailwind CDN, Chart.js 4.4, Lucide icons, Inter font |
+| Auth + DB | Firebase Auth (email/password) + Firebase Realtime Database |
+| Sync | Python 3.10 + `requests`, vzor z Vacancies `ats_sync.py` |
+| Automatizace | GitHub Actions (`datacruit_sync`, `firebase_backup`, `firebase_cleanup`) |
+| Testy | pytest/unittest (Python), Playwright (browser) |
 
-## Lokální spuštění
+## Struktura repa
+
+```
+.
+├── index.html                        # main dashboard shell
+├── assets/
+│   ├── styles/app.css                # design system
+│   └── js/
+│       ├── core.js                   # state, Firebase config, country switch
+│       ├── auth.js                   # Firebase Auth handlers
+│       ├── dashboard.js              # candidate list + HR scoring UI
+│       └── stats.js                  # statistics views (KPIs + 11 charts)
+├── ats_sync.py                       # Datacruit → Firebase sync
+├── scripts/
+│   ├── firebase_backup.py            # weekly RTDB export
+│   └── firebase_cleanup_old_snapshots.py
+├── .github/workflows/
+│   ├── datacruit_sync.yml            # 07:00 UTC denně
+│   ├── firebase_backup.yml           # týdně
+│   └── firebase_cleanup.yml          # týdně
+├── tests/
+│   ├── test_ats_sync.py              # unittest
+│   └── browser/smoke.spec.js         # Playwright
+├── docs/
+│   ├── firebase-setup.md             # guide pro Chrome Claude agenta
+│   ├── security-rules.md             # RTDB rules
+│   └── data-model.md                 # schéma RTDB
+├── requirements.txt                  # requests
+├── requirements-dev.txt              # + pytest
+└── package.json                      # Playwright devDependency
+```
+
+## Setup — první spuštění
+
+### 1) Založit Firebase projekt
+
+Otevři `docs/firebase-setup.md` a projdi kroky (určeno i jako instrukce pro
+samostatného Claude agenta v Google Chrome). Výstup:
+
+- `FIREBASE_DATABASE_URL`
+- `FIREBASE_SECRET` (legacy database secret)
+- `firebaseConfig` pro frontend
+
+### 2) Uložit GitHub secrets
+
+`Settings → Secrets and variables → Actions → New repository secret`:
+
+- `DATACRUIT_USERNAME`
+- `DATACRUIT_PASSWORD`
+- `FIREBASE_DATABASE_URL`
+- `FIREBASE_SECRET`
+
+### 3) Vložit `firebaseConfig` do frontendu
+
+V `assets/js/core.js` nahraď konstantu `FIREBASE_CONFIG` hodnotami z Firebase console
+(Step 5 v `docs/firebase-setup.md`).
+
+### 4) První sync
+
+V záložce **Actions** spusť workflow `Datacruit competence_models to Firebase Sync`
+manuálně. Po doběhnutí by v **Summary** měl být `SYNC_STATUS: success` s `recordCount ≈ 800+`.
+
+### 5) Lokální vývoj
 
 ```bash
 # Frontend
 python -m http.server 4173
-# otevři http://127.0.0.1:4173/index.html
+# http://127.0.0.1:4173/index.html
 
-# Python sync (vyžaduje .env s credentials, viz .env.example)
-pip install -r requirements.txt
+# Python sync lokálně (po exportu secretů do .env)
+pip install -r requirements-dev.txt
 python ats_sync.py
+
+# Testy
+python -m unittest tests.test_ats_sync -v
+npx playwright test
 ```
 
-## Struktura
+## Uživatelská role
 
-```
-.
-├── index.html                 # hlavní dashboard
-├── assets/
-│   ├── styles/app.css
-│   └── js/                    # core.js, dashboard.js, views.js, auth.js
-├── ats_sync.py                # Datacruit → Firebase sync (main)
-├── firebase_backup.py         # zálohy RTDB
-├── scripts/                   # podpůrné skripty (cleanup, restore)
-├── tests/
-│   ├── browser/               # Playwright smoke testy
-│   └── test_ats_sync.py       # pytest unit testy
-├── .github/workflows/         # scheduled syncs, backups
-└── docs/                      # dokumentace k handoffům
-```
+- Všichni přihlášení uživatelé mají stejná práva — mohou číst data a psát HR hodnocení.
+- U každého HR zápisu se loguje `updatedBy` (email) a `updatedAt`. Historie změn se
+  drží v `/hrScoreHistory`.
+- Rozlišení rolí (manažer vs. HR konzultant) v této verzi není — přidá se až bude potřeba.
 
-## Secrets (GitHub Actions / .env)
+## Licence
 
-- `DATACRUIT_USERNAME`, `DATACRUIT_PASSWORD` — Datacruit API auth
-- `FIREBASE_DATABASE_URL` — URL Firebase RTDB
-- `FIREBASE_SECRET` — Firebase legacy token / service account
-
-## Status
-
-Projekt je ve fázi inicializace — skeleton podle vzoru `Vacancies` repo.
+Interní nástroj AURES Holding.
