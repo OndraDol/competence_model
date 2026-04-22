@@ -13,9 +13,12 @@ Design a stack inspirovaný [AURES Vacancies](https://github.com/OndraDol/vacanc
 - Přepínač zemí CZ / SK / PL / **All** (v All módu lze filtrovat podle země)
 - Filtry: pozice (`form_name`), katalog, pobočka, manažer
 - Globální hledání (kandidát / manažer / pobočka / ...)
-- Sekce statistik: 6 KPI + 11 vizualizací (TOP/BOTTOM kandidáti, průměry per pozice /
-  pobočka / manažer / klient, distribuce bodů per kompetence, trend v čase, srovnání zemí,
-  histogram total_points, quartily per pozice)
+- **Statistiky**: 6 KPI v jednom řádku (počet, průměr, medián, hodnoceno tento týden,
+  za posledních 30 dní, aktivních manažerů) + sekce kvalita / žebříčky / manažeři /
+  kompetence (heatmapa) / vývoj v čase / TOP-BOTTOM / radar
+- **Srovnání**: side-by-side analýza dvou skupin (oddělení / pozice / pobočka / země /
+  manažer) — KPI bloky, histogramy, radar, rozdíl v kompetencích, trend v čase
+- Model `General` je z reportu vyloučen (filtruje se v `getAllResultsArray`)
 - Automatický denní sync z Datacruit API v 07:00 UTC (GitHub Actions)
 - **Password gate + AES-256-GCM šifrování** — žádný backend, žádná Firebase
 
@@ -42,7 +45,7 @@ Design a stack inspirovaný [AURES Vacancies](https://github.com/OndraDol/vacanc
 │       └── assets/
 │           ├── favicon.svg
 │           ├── styles/app.css
-│           └── js/{crypto,core,dashboard,stats}.js
+│           └── js/{crypto,core,dashboard,stats,comparison}.js
 ├── ats_sync.py                           # Datacruit → šifrovaný blob
 ├── requirements.txt                      # requests + cryptography
 ├── requirements-dev.txt                  # + pytest

@@ -691,10 +691,91 @@ html[data-theme="dark"] .filter-bar-global { background: var(--surface); }
     height: 1px;
     background: var(--border-light);
 }
+
+/* ── Designed numbered section header (Comparison view) ── */
+.stats-section-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 22px 0 14px;
+}
+.stats-section-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+}
+.stats-section-header h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--border-medium), transparent);
+    margin-left: 4px;
+}
+.stats-section-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-width: 46px;
+    height: 46px;
+    padding: 0 12px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+    color: #fff;
+    font-size: 18px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    box-shadow: 0 6px 14px -6px rgba(37, 99, 235, 0.55), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+html[data-theme="dark"] .stats-section-num {
+    box-shadow: 0 6px 14px -6px rgba(37, 99, 235, 0.7), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.stats-section-sub {
+    flex-basis: 100%;
+    margin: -2px 0 0 62px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+@media (max-width: 720px) {
+    .stats-section-num { min-width: 40px; height: 40px; font-size: 16px; border-radius: 12px; }
+    .stats-section-header h2 { font-size: 17px; gap: 12px; }
+    .stats-section-sub { margin-left: 0; }
+}
+
 .stats-grid-2 {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
     gap: 14px;
+}
+.stats-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+@media (max-width: 1100px) {
+    .stats-grid-3 { grid-template-columns: 1fr; }
+}
+
+/* KPI grid varianta — všech N karet v jediném řádku (statistiky horní strip) */
+.kpi-grid.kpi-grid-strip {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+@media (max-width: 1280px) {
+    .kpi-grid.kpi-grid-strip { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 720px) {
+    .kpi-grid.kpi-grid-strip { grid-template-columns: repeat(2, 1fr); }
 }
 .stats-card {
     padding: 18px 20px;

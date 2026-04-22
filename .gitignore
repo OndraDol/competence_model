@@ -25,3 +25,8 @@ test-results/
 # Firebase credentials
 firebase-credentials.json
 serviceAccount*.json
+
+# Editor / local tooling
+.claude/
+.vscode/
+.idea/

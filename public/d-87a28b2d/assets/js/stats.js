@@ -45,8 +45,6 @@ function renderStats() {
         managerAvgs.slice().sort((a, b) => b.avg - a.avg).slice(0, 10),
         "#f59e0b", { suggestedMax: 70 });
     renderCountBarChart("chartMostActiveManagers", groupCount(records, "manager_name", 10), "#3b82f6");
-    renderCountBarChart("chartMostActivePositions", groupCount(records, "catalog_position", 10), "#8b5cf6");
-    renderManagerVarianceTable(records);
 
     // 4. Kompetence
     renderCompetenceCharts(records);
@@ -61,7 +59,7 @@ function renderStats() {
     // 7. Srovnání zemí (jen All)
     if (State.globalCountry === "ALL") renderCountryCompare();
 
-    // 8./9. Vizuální přehled (radar + scatter)
+    // 8./9. Vizuální přehled (radar)
     renderVisualOverview(records);
 
     if (window.lucide) lucide.createIcons();
@@ -82,7 +80,7 @@ function renderStatsLayout() {
         </div>` : "";
 
     return `
-        <div class="kpi-grid" id="statsKpiGrid"></div>
+        <div class="kpi-grid kpi-grid-strip" id="statsKpiGrid"></div>
 
         <!-- 1. KVALITA KANDIDÁTŮ (základní srovnání) -->
         <div class="stats-section">
@@ -127,7 +125,7 @@ function renderStatsLayout() {
         <!-- 3. MANAŽEŘI: KDO JAK HODNOTÍ -->
         <div class="stats-section">
             <div class="stats-section-title"><span>3. Manažeři: kdo jak hodnotí</span></div>
-            <div class="stats-grid-2">
+            <div class="stats-grid-3">
                 <div class="stats-card card-tall">
                     <h4>Kdo hodnotí nejpřísněji</h4>
                     <div class="stats-sub">Nejnižší průměrné skóre u jejich kandidátů (min. 5 hodnocení)</div>
@@ -143,16 +141,6 @@ function renderStatsLayout() {
                     <div class="stats-sub">Kdo udělal nejvíc hodnocení v aktuálním výběru</div>
                     <canvas id="chartMostActiveManagers" class="stats-chart-canvas"></canvas>
                 </div>
-                <div class="stats-card card-tall">
-                    <h4>Nejvíce hodnocené pozice (počet kandidátů)</h4>
-                    <div class="stats-sub">Na které pozice přichází nejvíc kandidátů</div>
-                    <canvas id="chartMostActivePositions" class="stats-chart-canvas"></canvas>
-                </div>
-                <div class="stats-card" style="grid-column: 1 / -1;">
-                    <h4>Variabilita hodnocení podle manažerů</h4>
-                    <div class="stats-sub">Nízká odchylka = konzistentní hodnotitel; vysoká = body rozprostírá v širokém pásmu (min. 5 hodnocení)</div>
-                    <div id="managerVarianceTable"></div>
-                </div>
             </div>
         </div>
 
@@ -160,12 +148,12 @@ function renderStatsLayout() {
         <div class="stats-section">
             <div class="stats-section-title"><span>4. Kompetence: silné a slabé stránky kandidátů</span></div>
             <div class="stats-grid-2">
-                <div class="stats-card card-tall">
+                <div class="stats-card card-tall" style="grid-column: 1 / -1;">
                     <h4>Nejsilnější a nejslabší kompetence</h4>
                     <div class="stats-sub">Průměrné body u každé kompetence napříč odděleními</div>
                     <canvas id="chartCompetenceAvg" class="stats-chart-canvas"></canvas>
                 </div>
-                <div class="stats-card card-tall">
+                <div class="stats-card card-tall" style="grid-column: 1 / -1;">
                     <h4>Rozložení bodů u jednotlivých kompetencí</h4>
                     <div class="stats-sub">Kolikrát kompetence dostala jakou známku (1–10)</div>
                     <canvas id="chartCompetenceDist" class="stats-chart-canvas"></canvas>
@@ -206,7 +194,7 @@ function renderStatsLayout() {
 
         ${countryCompareSection}
 
-        <!-- 9. VIZUÁLNÍ PŘEHLED (radar + scatter, úplně dole) -->
+        <!-- 9. VIZUÁLNÍ PŘEHLED (radar) -->
         <div class="stats-section">
             <div class="stats-section-title"><span>${State.globalCountry === "ALL" ? "9" : "8"}. Vizuální přehled</span></div>
             <div class="stats-grid-2">
@@ -214,11 +202,6 @@ function renderStatsLayout() {
                     <h4>Profil kompetencí podle oddělení</h4>
                     <div class="stats-sub">Radar ukazuje sílu každé kompetence (stupnice 0–10). Barevná síť = jedno oddělení. Větší plocha směrem ven = vyšší průměr v dané kompetenci.</div>
                     <canvas id="chartRadar" class="stats-chart-canvas"></canvas>
-                </div>
-                <div class="stats-card card-xtall" style="grid-column: 1 / -1;">
-                    <h4>Všichni kandidáti v čase</h4>
-                    <div class="stats-sub">Každá tečka = jeden kandidát. Osa X: datum hodnocení, osa Y: celkové skóre, barva: oddělení. Odhalí outliery a vývoj kvality.</div>
-                    <canvas id="chartScatter" class="stats-chart-canvas"></canvas>
                 </div>
             </div>
         </div>`;
@@ -232,15 +215,16 @@ function renderStatsKpis(records) {
     const count = records.length;
     const totals = records.map(r => r.total_points || 0).sort((a, b) => a - b);
     const avgTotal = count ? (totals.reduce((s, n) => s + n, 0) / count) : 0;
-    const maxTotal = totals.length ? totals[totals.length - 1] : 0;
-    const minTotal = totals.length ? totals[0] : 0;
     const medianTotal = totals.length ? median(totals) : 0;
 
-    const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;
+    const now = Date.now();
+    const DAY = 24 * 3600 * 1000;
+    const sevenDaysAgo = now - 7 * DAY;
+    const thirtyDaysAgo = now - 30 * DAY;
     const thisWeek = records.filter(r => r.date_filled && new Date(r.date_filled).getTime() >= sevenDaysAgo).length;
+    const last30Days = records.filter(r => r.date_filled && new Date(r.date_filled).getTime() >= thirtyDaysAgo).length;
 
     const activeManagers = new Set(records.map(r => r.manager_name).filter(Boolean)).size;
-    const coveredCities = new Set(records.map(r => r.client_branch_name).filter(Boolean)).size;
 
     grid.innerHTML = `
         <div class="kpi-card accent-blue">
@@ -261,35 +245,23 @@ function renderStatsKpis(records) {
             <div class="kpi-value">${medianTotal.toFixed(1)}</div>
             <div class="kpi-sub">polovina má víc, polovina míň</div>
         </div>
-        <div class="kpi-card accent-green">
-            <div class="kpi-icon"><i data-lucide="award" style="color:var(--accent-ok);width:18px;height:18px;"></i></div>
-            <div class="kpi-label">Nejlepší kandidát</div>
-            <div class="kpi-value" style="color:var(--accent-ok);">${maxTotal}</div>
-            <div class="kpi-sub">maximální skóre ve výběru</div>
-        </div>
-        <div class="kpi-card accent-red">
-            <div class="kpi-icon"><i data-lucide="trending-down" style="color:var(--accent-danger);width:18px;height:18px;"></i></div>
-            <div class="kpi-label">Nejnižší zaznamenané skóre</div>
-            <div class="kpi-value" style="color:var(--accent-danger);">${minTotal}</div>
-            <div class="kpi-sub">minimum ve výběru</div>
-        </div>
         <div class="kpi-card accent-amber">
             <div class="kpi-icon"><i data-lucide="calendar-clock" style="color:var(--accent-warn);width:18px;height:18px;"></i></div>
             <div class="kpi-label">Hodnoceno tento týden</div>
             <div class="kpi-value" style="color:#b45309;">${thisWeek}</div>
             <div class="kpi-sub">za posledních 7 dní</div>
         </div>
+        <div class="kpi-card accent-amber">
+            <div class="kpi-icon"><i data-lucide="calendar-days" style="color:var(--accent-warn);width:18px;height:18px;"></i></div>
+            <div class="kpi-label">Hodnocení za posledních 30 dní</div>
+            <div class="kpi-value" style="color:#b45309;">${last30Days}</div>
+            <div class="kpi-sub">klouzavé 30denní okno</div>
+        </div>
         <div class="kpi-card accent-blue">
             <div class="kpi-icon"><i data-lucide="user-check" style="color:var(--brand-500);width:18px;height:18px;"></i></div>
             <div class="kpi-label">Aktivních manažerů</div>
             <div class="kpi-value" style="color:var(--brand-600);">${activeManagers}</div>
             <div class="kpi-sub">různých hodnotitelů</div>
-        </div>
-        <div class="kpi-card accent-slate">
-            <div class="kpi-icon"><i data-lucide="map-pin" style="color:var(--text-muted);width:18px;height:18px;"></i></div>
-            <div class="kpi-label">Pokrytých měst</div>
-            <div class="kpi-value">${coveredCities}</div>
-            <div class="kpi-sub">v aktuálním výběru</div>
         </div>`;
 }
 
@@ -299,13 +271,12 @@ function periodLabel() {
     return map[p] || "celé období";
 }
 
-// ── Visual overview: radar + scatter ─────────────
+// ── Visual overview: radar ───────────────────────
 const FORM_PALETTE = {
     "Salesman":    { stroke: "#3b82f6", fill: "rgba(59,130,246,0.18)"  },
     "FnI":         { stroke: "#10b981", fill: "rgba(16,185,129,0.18)"  },
     "Call Centre": { stroke: "#f59e0b", fill: "rgba(245,158,11,0.18)"  },
-    "Test Driver": { stroke: "#8b5cf6", fill: "rgba(139,92,246,0.18)"  },
-    "General":     { stroke: "#ef4444", fill: "rgba(239,68,68,0.18)"   }
+    "Test Driver": { stroke: "#8b5cf6", fill: "rgba(139,92,246,0.18)"  }
 };
 function formColors(form) {
     return FORM_PALETTE[form] || { stroke: "#94a3b8", fill: "rgba(148,163,184,0.18)" };
@@ -313,7 +284,6 @@ function formColors(form) {
 
 function renderVisualOverview(records) {
     renderCompetenceRadar(records);
-    renderCandidateScatter(records);
 }
 
 function renderCompetenceRadar(records) {
@@ -407,93 +377,6 @@ function renderCompetenceRadar(records) {
                     grid: { color: "rgba(148,163,184,0.2)" },
                     angleLines: { color: "rgba(148,163,184,0.25)" },
                     pointLabels: { color: "#334155", font: { size: 11, weight: "600" } }
-                }
-            }
-        }
-    });
-}
-
-function renderCandidateScatter(records) {
-    const byForm = {};
-    records.forEach(r => {
-        if (!r.date_filled || typeof r.total_points !== "number") return;
-        const t = Date.parse(r.date_filled);
-        if (!Number.isFinite(t)) return;
-        const form = r.form_name || "—";
-        if (!byForm[form]) byForm[form] = [];
-        byForm[form].push({
-            x: t,
-            y: r.total_points,
-            name: r.candidate_fullname,
-            date: r.date_filled,
-            manager: r.manager_name,
-            city: r.client_branch_name,
-            position: r.catalog_position
-        });
-    });
-
-    const datasets = Object.entries(byForm).map(([form, pts]) => {
-        const colors = formColors(form);
-        return {
-            label: form,
-            data: pts,
-            backgroundColor: colors.stroke + "cc",
-            borderColor: colors.stroke,
-            borderWidth: 1,
-            pointRadius: 4,
-            pointHoverRadius: 7
-        };
-    });
-
-    destroyChart("chartScatter");
-    const canvas = document.getElementById("chartScatter");
-    if (!canvas) return;
-    ChartRegistry["chartScatter"] = new Chart(canvas, {
-        type: "scatter",
-        data: { datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: "bottom", labels: { color: "#475569", font: { size: 11 }, boxWidth: 12, padding: 10 } },
-                tooltip: {
-                    callbacks: {
-                        title: () => "",
-                        label: (ctx) => {
-                            const p = ctx.raw;
-                            return [
-                                `${p.name || "—"} (${ctx.dataset.label})`,
-                                `Skóre: ${p.y} · Datum: ${p.date}`,
-                                `${p.position || ""} · ${p.city || ""}`,
-                                `Manažer: ${p.manager || "—"}`
-                            ];
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    type: "linear",
-                    ticks: {
-                        color: "#64748b",
-                        font: { size: 10 },
-                        callback: (value) => {
-                            const d = new Date(value);
-                            return d.toLocaleDateString("cs-CZ", { month: "short", year: "2-digit" });
-                        },
-                        maxRotation: 0,
-                        autoSkip: true,
-                        maxTicksLimit: 12
-                    },
-                    grid: { color: "rgba(148,163,184,0.12)" },
-                    title: { display: true, text: "Datum hodnocení", color: "#94a3b8", font: { size: 11 } }
-                },
-                y: {
-                    beginAtZero: true,
-                    max: 70,
-                    ticks: { color: "#64748b" },
-                    grid: { color: "rgba(148,163,184,0.12)" },
-                    title: { display: true, text: "Celkové skóre (z 70)", color: "#94a3b8", font: { size: 11 } }
                 }
             }
         }
@@ -1162,64 +1045,3 @@ function renderCountBarChart(canvasId, buckets, color) {
     });
 }
 
-function renderManagerVarianceTable(records) {
-    const host = document.getElementById("managerVarianceTable");
-    if (!host) return;
-
-    const byManager = {};
-    records.forEach(r => {
-        if (!r.manager_name || typeof r.total_points !== "number") return;
-        if (!byManager[r.manager_name]) byManager[r.manager_name] = [];
-        byManager[r.manager_name].push(r.total_points);
-    });
-
-    const rows = Object.entries(byManager)
-        .filter(([, arr]) => arr.length >= 5)
-        .map(([name, arr]) => {
-            const sorted = arr.slice().sort((a, b) => a - b);
-            const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
-            return {
-                name,
-                n: arr.length,
-                avg,
-                sd: stddev(arr),
-                min: sorted[0],
-                max: sorted[sorted.length - 1],
-                range: sorted[sorted.length - 1] - sorted[0]
-            };
-        })
-        .sort((a, b) => b.sd - a.sd);
-
-    if (!rows.length) {
-        host.innerHTML = `<p style="color:var(--text-muted);font-size:13px;padding:8px;">Málo dat (potřeba alespoň 5 hodnocení na manažera).</p>`;
-        return;
-    }
-
-    host.innerHTML = `
-        <table class="stats-table">
-            <thead>
-                <tr>
-                    <th>Manažer</th>
-                    <th class="num">Hodnocení</th>
-                    <th class="num">Ø skóre</th>
-                    <th class="num">Min</th>
-                    <th class="num">Max</th>
-                    <th class="num">Rozpětí</th>
-                    <th class="num">Odchylka</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${rows.map(r => `
-                    <tr>
-                        <td><strong>${escapeHtml(r.name)}</strong></td>
-                        <td class="num">${r.n}</td>
-                        <td class="num">${r.avg.toFixed(1)}</td>
-                        <td class="num">${r.min}</td>
-                        <td class="num">${r.max}</td>
-                        <td class="num">${r.range}</td>
-                        <td class="num"><strong>${r.sd.toFixed(2)}</strong></td>
-                    </tr>
-                `).join("")}
-            </tbody>
-        </table>`;
-}

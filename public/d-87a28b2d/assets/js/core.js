@@ -134,8 +134,9 @@ function handleSearch(value) {
 }
 
 // ── Data access ──────────────────────────────────
+// Model "General" je z reportu vyloučen napříč všemi pohledy (KPI, grafy, dropdowny, srovnání).
 function getAllResultsArray() {
-    return Object.values(State.results || {});
+    return Object.values(State.results || {}).filter(r => r.form_name !== "General");
 }
 
 function matchesSearch(record, needle) {

@@ -185,7 +185,7 @@ function renderComparisonLayout(cmp, groupA, groupB) {
     const managersBlock = cmp.dimension !== "manager" ? `
         <section class="stats-section">
             <div class="stats-section-header">
-                <h2><span class="stats-section-num">8</span> Manažeři uvnitř skupin</h2>
+                <h2><span class="stats-section-num">09</span> Manažeři uvnitř skupin</h2>
                 <p class="stats-section-sub">Kdo nejvíc hodnotí v každé skupině — odhaluje, zda rozdíl tlačí konkrétní manažer.</p>
             </div>
             <div class="cmp-two-col">
@@ -217,7 +217,7 @@ function renderComparisonLayout(cmp, groupA, groupB) {
 
         <section class="stats-section">
             <div class="stats-section-header">
-                <h2><span class="stats-section-num">0</span> Přehled skupin</h2>
+                <h2><span class="stats-section-num">01</span> Přehled skupin</h2>
                 <p class="stats-section-sub">Základní metriky — počet, průměr, medián, rozpětí, konzistence hodnocení a podíl výborných/slabých kandidátů.</p>
             </div>
             <div class="cmp-kpi-blocks" id="cmpKpiBlocks"></div>
@@ -225,7 +225,7 @@ function renderComparisonLayout(cmp, groupA, groupB) {
 
         <section class="stats-section">
             <div class="stats-section-header">
-                <h2><span class="stats-section-num">1</span> Rozložení skóre</h2>
+                <h2><span class="stats-section-num">02</span> Rozložení skóre</h2>
                 <p class="stats-section-sub">Kolik kandidátů spadá do kterého bodového pásma — porovnání tvaru distribuce obou skupin.</p>
             </div>
             <div class="stats-card card-tall"><canvas class="stats-chart-canvas" id="cmpHistogram"></canvas></div>
@@ -233,7 +233,7 @@ function renderComparisonLayout(cmp, groupA, groupB) {
 
         <section class="stats-section">
             <div class="stats-section-header">
-                <h2><span class="stats-section-num">2</span> Kompetenční radar</h2>
+                <h2><span class="stats-section-num">03</span> Kompetenční radar</h2>
                 <p class="stats-section-sub">Silné a slabé stránky každé skupiny napříč kompetencemi v jednom grafu.</p>
             </div>
             <div class="stats-card card-xtall"><canvas class="stats-chart-canvas" id="cmpRadar"></canvas></div>
@@ -241,7 +241,7 @@ function renderComparisonLayout(cmp, groupA, groupB) {
 
         <section class="stats-section">
             <div class="stats-section-header">
-                <h2><span class="stats-section-num">3</span> Rozdíl v kompetencích (A − B)</h2>
+                <h2><span class="stats-section-num">04</span> Rozdíl v kompetencích (A − B)</h2>
                 <p class="stats-section-sub">Modrá = A je silnější, oranžová = B je silnější. Seřazeno podle velikosti rozdílu.</p>
             </div>
             <div class="stats-card card-tall"><canvas class="stats-chart-canvas" id="cmpDiffBar"></canvas></div>
@@ -249,7 +249,7 @@ function renderComparisonLayout(cmp, groupA, groupB) {
 
         <section class="stats-section">
             <div class="stats-section-header">
-                <h2><span class="stats-section-num">4</span> Vývoj průměrného skóre v čase</h2>
+                <h2><span class="stats-section-num">05</span> Vývoj průměrného skóre v čase</h2>
                 <p class="stats-section-sub">Měsíční průměr obou skupin vedle sebe.</p>
             </div>
             <div class="stats-card card-tall"><canvas class="stats-chart-canvas" id="cmpTrend"></canvas></div>
@@ -257,7 +257,7 @@ function renderComparisonLayout(cmp, groupA, groupB) {
 
         <section class="stats-section">
             <div class="stats-section-header">
-                <h2><span class="stats-section-num">5</span> Aktivita v čase</h2>
+                <h2><span class="stats-section-num">06</span> Aktivita v čase</h2>
                 <p class="stats-section-sub">Počet hodnocení měsíčně — odhaluje sezónní trendy a rozdíly v objemu.</p>
             </div>
             <div class="stats-card card-tall"><canvas class="stats-chart-canvas" id="cmpActivity"></canvas></div>
@@ -265,7 +265,7 @@ function renderComparisonLayout(cmp, groupA, groupB) {
 
         <section class="stats-section">
             <div class="stats-section-header">
-                <h2><span class="stats-section-num">6</span> Nejlepší a nejhorší kandidáti</h2>
+                <h2><span class="stats-section-num">07</span> Nejlepší a nejhorší kandidáti</h2>
                 <p class="stats-section-sub">Konkrétní jména na vrcholu a na dně obou skupin.</p>
             </div>
             <div class="cmp-two-col">
@@ -290,7 +290,7 @@ function renderComparisonLayout(cmp, groupA, groupB) {
 
         <section class="stats-section">
             <div class="stats-section-header">
-                <h2><span class="stats-section-num">7</span> ${escapeHtml(breakdownTitle)}</h2>
+                <h2><span class="stats-section-num">08</span> ${escapeHtml(breakdownTitle)}</h2>
                 <p class="stats-section-sub">Pomáhá ověřit, jestli je srovnání férové — zda mají obě skupiny podobný mix uvnitř.</p>
             </div>
             <div class="cmp-two-col">
