@@ -21,6 +21,24 @@ Design a stack inspirovaný [AURES Vacancies](https://github.com/OndraDol/vacanc
 - Model `General` je z reportu vyloučen (filtruje se v `getAllResultsArray`)
 - Automatický denní sync z Datacruit API v 07:00 UTC (GitHub Actions)
 - **Password gate + AES-256-GCM šifrování** — žádný backend, žádná Firebase
+- 🐱 **Cat Mode** easter egg (skrytý kočičí téma s plně animovanými scénáři, viz níže)
+
+## 🐱 Cat Mode (easter egg)
+
+Klikem na 🐱 v hlavičce se aktivuje růžovo-magenta téma se sadou kočičích mikro-chování, designově sladěné s dog modem v sousedním projektu Vacancies:
+
+- **8 plemen koček** procedurálně renderovaných jako SVG (tabby, black, persian, siamese, british shorthair, maine coon, sphynx, calico) — každé s vlastními barvami srsti, tvarem uší, ocasu a vzorem.
+- **4 scénáře** vybírané scheduler-em každých 12–22 s (nikdy stejný 2× za sebou):
+  - **sleep** — kočka přijde, stočí se do klubíčka, dýchá, protáhne se a odejde.
+  - **grooming** — kočka si líže tlapku, drbe za uchem, zívá, protáhne se.
+  - **knockOff** — kočka přistoupí k náhodnému KPI / tlačítku, šťouchne tlapou (`.cat-shake` keyframes), podívá se na uživatele a odejde.
+  - **mouseHunt** — pixel-art myš přeběhne přes obrazovku, kočka se přikrčí a skočí (50 % pounce success).
+- **Padající 🐾 / 🐟** v pozadí, **vrtící ocásky v rozích KPI karet**, **knírky kolem search fieldu**, **boční kočky procházející okrajem** (>1280 px viewport).
+- **Mňau zvuk** přes Web Audio API (sine osc + frequency slide + LFO vibrato + bandpass filter) — žádný externí asset.
+- **`prefers-reduced-motion: reduce`** vypne všechny animace; `mouseHunt` se v tom režimu nahradí `grooming`.
+- **Persistence** přes `localStorage` (`cm.theme` + `cm.standardTheme` fallback). Toggle off vrátí předchozí dark/light theme.
+
+Scheduler je laděný na "často ale nerušivě" — kočka se na obrazovce objevuje pravidelně, ale jednotlivé scénáře jsou krátké a nikdy nepřekrývají hlavní funkčnost dashboardu.
 
 ## Stack
 

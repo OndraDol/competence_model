@@ -19,6 +19,8 @@
 
 <body class="flex flex-col h-screen">
 
+    <div id="catModeField" class="cat-field" aria-hidden="true"></div>
+
     <!-- Password gate -->
     <div id="loginOverlay" style="display: none;">
         <div class="login-card">
@@ -61,6 +63,12 @@
                 <i data-lucide="search" class="search-icon"></i>
                 <input type="text" id="globalSearch" placeholder="Hledat kandidáta, manažera, pobočku…"
                        class="search-input" oninput="handleSearch(this.value)">
+            </div>
+
+            <div class="mode-triggers" role="group" aria-label="Easter egg módy">
+                <button type="button" class="mode-trigger-btn" data-mode="cat"
+                    onclick="toggleEasterEggMode('cat', event)"
+                    aria-label="Cat Mode" aria-pressed="false" title="Cat Mode">🐱</button>
             </div>
 
             <button onclick="showDashboardView()" id="dashboardBtn" class="btn-upload hidden">

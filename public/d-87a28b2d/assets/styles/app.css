@@ -1053,3 +1053,373 @@ html[data-theme="dark"] .cmp-empty-icon { background: rgba(59,130,246,0.12); }
     .cmp-controls-row-values { flex-direction: column; align-items: stretch; }
     .cmp-vs { align-self: center; padding: 6px 0; }
 }
+
+/* ════════════════════════════════════════════════
+   CAT MODE
+   ════════════════════════════════════════════════ */
+
+/* ── Mode triggers (forward-compat for future modes) ── */
+.mode-triggers {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 5px;
+    margin: 0 4px;
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(10px) saturate(1.2);
+    border: 1px solid rgba(203, 213, 225, 0.6);
+    border-radius: 999px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+    flex-shrink: 0;
+}
+html[data-theme="dark"] .mode-triggers {
+    background: rgba(30, 41, 59, 0.55);
+    border-color: rgba(71, 85, 105, 0.6);
+}
+.mode-trigger-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    appearance: none;
+    user-select: none;
+    filter: grayscale(0.15);
+    opacity: 0.82;
+}
+.mode-trigger-btn:hover {
+    transform: scale(1.18);
+    filter: grayscale(0);
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.85);
+}
+.mode-trigger-btn[data-mode="cat"][aria-pressed="true"] {
+    background: rgba(244, 114, 182, 0.22);
+    border-color: rgba(244, 114, 182, 0.7);
+    filter: grayscale(0);
+    opacity: 1;
+    box-shadow: 0 0 14px rgba(244, 114, 182, 0.45), 0 0 22px rgba(249, 168, 212, 0.3);
+    animation: catTriggerPulse 1.6s ease-in-out infinite;
+}
+@keyframes catTriggerPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 14px rgba(244, 114, 182, 0.45), 0 0 22px rgba(249, 168, 212, 0.3); }
+    50%      { transform: scale(1.10); box-shadow: 0 0 20px rgba(244, 114, 182, 0.7), 0 0 30px rgba(249, 168, 212, 0.5); }
+}
+
+/* ── Paleta ──────────────────────────────────────────── */
+html[data-theme="cat"] {
+    --surface: #FFF6FB;
+    --surface-warm: #FFFAFD;
+    --surface-card: #FFFFFF;
+    --surface-subtle: #FCE7F3;
+    --text-primary: #4A1B3F;
+    --text-secondary: #6E325E;
+    --text-muted: #9C5A8A;
+    --brand-50:  #FDF2F8;
+    --brand-100: #FCE7F3;
+    --brand-200: #FBCFE8;
+    --brand-300: #F9A8D4;
+    --brand-400: #F472B6;
+    --brand-500: #EC4899;
+    --brand-600: #DB2777;
+    --brand-700: #BE185D;
+    --border-light:  rgba(190, 24, 93, 0.10);
+    --border-medium: rgba(190, 24, 93, 0.18);
+    --border-strong: rgba(190, 24, 93, 0.30);
+}
+
+html[data-theme="cat"] body {
+    background:
+        radial-gradient(ellipse at 90% -10%, rgba(249, 168, 212, 0.45) 0%, transparent 55%),
+        radial-gradient(ellipse at -10% 110%, rgba(244, 114, 182, 0.25) 0%, transparent 55%),
+        linear-gradient(135deg, #FFF6FB 0%, #FCE7F3 100%);
+}
+
+html[data-theme="cat"] body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.42;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'><g fill='%23DB2777' opacity='0.08'><circle cx='32' cy='40' r='4'/><circle cx='40' cy='34' r='3'/><circle cx='48' cy='40' r='4'/><ellipse cx='40' cy='52' rx='8' ry='6'/><circle cx='100' cy='100' r='4'/><circle cx='108' cy='94' r='3'/><circle cx='116' cy='100' r='4'/><ellipse cx='108' cy='112' rx='8' ry='6'/></g></svg>");
+    background-size: 240px 240px;
+    background-repeat: repeat;
+}
+html[data-theme="cat"], html[data-theme="cat"] body { overflow-x: clip; }
+
+html[data-theme="cat"] .app-header {
+    background: rgba(255, 250, 253, 0.92);
+    border-bottom-color: rgba(244, 114, 182, 0.28);
+    box-shadow: 0 1px 0 rgba(244, 114, 182, 0.18), 0 8px 24px rgba(190, 24, 93, 0.06);
+    backdrop-filter: blur(8px);
+}
+html[data-theme="cat"] .logo-mark-bg {
+    background: linear-gradient(135deg, #F9A8D4 0%, #DB2777 100%);
+}
+html[data-theme="cat"] .logo-title { color: #4A1B3F; }
+html[data-theme="cat"] .kpi-card {
+    border-color: rgba(244, 114, 182, 0.22);
+    box-shadow: 0 4px 18px rgba(190, 24, 93, 0.06);
+}
+html[data-theme="cat"] .search-input {
+    background: #FFFFFF;
+    border-color: rgba(244, 114, 182, 0.30);
+}
+html[data-theme="cat"] .country-btn.active {
+    background: var(--brand-600);
+    color: #FFFFFF;
+}
+html[data-theme="cat"] .mode-triggers {
+    background: rgba(252, 231, 243, 0.65);
+    border-color: rgba(244, 114, 182, 0.35);
+}
+html[data-theme="cat"] .mode-trigger-btn:hover {
+    background: rgba(252, 231, 243, 0.9);
+}
+
+/* ── Field container + falling decorations ──────────── */
+.cat-field {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 2;
+}
+html[data-theme="cat"] .cat-paw {
+    position: absolute;
+    top: -40px;
+    line-height: 1;
+    display: inline-block;
+    animation: catPawFall linear forwards;
+    filter: drop-shadow(0 2px 4px rgba(190, 24, 93, 0.18));
+    opacity: 0;
+}
+@keyframes catPawFall {
+    0%   { transform: translate3d(0, 0, 0) rotate(0); opacity: 0; }
+    10%  { opacity: var(--paw-opacity, 0.55); }
+    100% { transform: translate3d(var(--cat-drift, 0), 110vh, 0) rotate(var(--cat-spin, 180deg)); opacity: 0; }
+}
+
+/* ── Cat runner (across screen) ────────────────────── */
+.cat-runner {
+    position: fixed;
+    left: -160px;
+    z-index: 3;
+    pointer-events: none;
+    animation: catRunRight var(--run-duration, 14s) linear forwards;
+    will-change: transform;
+    filter: drop-shadow(0 6px 12px rgba(190, 24, 93, 0.20));
+}
+.cat-runner-inner {
+    animation: catSlink var(--slink-speed, 0.55s) ease-in-out infinite alternate;
+    transform-origin: center bottom;
+}
+@keyframes catRunRight { 0% { transform: translateX(0); } 100% { transform: translateX(calc(100vw + 200px)); } }
+@keyframes catSlink {
+    0% { transform: translateY(0) scaleY(1); }
+    100% { transform: translateY(-2px) scaleY(0.985); }
+}
+
+html[data-theme="cat"] .cat-runner .cat-tail,
+html[data-theme="cat"] .cat-sidewalk .cat-tail,
+html[data-theme="cat"] .cat-corner-tail {
+    transform-origin: 14px 38px;
+    animation: catTailLazyWag var(--tail-speed, 1.3s) ease-in-out infinite alternate;
+}
+@keyframes catTailLazyWag {
+    0%   { transform: rotate(-12deg); }
+    100% { transform: rotate(14deg); }
+}
+
+html[data-theme="cat"] .cat-runner .cat-leg,
+html[data-theme="cat"] .cat-sidewalk .cat-leg {
+    transform-origin: 50% 48px;
+    animation: catLegStep var(--leg-speed, 0.42s) ease-in-out infinite alternate;
+}
+html[data-theme="cat"] .cat-runner .cat-leg-fr,
+html[data-theme="cat"] .cat-runner .cat-leg-br,
+html[data-theme="cat"] .cat-sidewalk .cat-leg-fr,
+html[data-theme="cat"] .cat-sidewalk .cat-leg-br {
+    animation-direction: alternate-reverse;
+}
+@keyframes catLegStep {
+    0%   { transform: translateY(0) rotate(-8deg); }
+    100% { transform: translateY(-1.5px) rotate(10deg); }
+}
+
+/* ── Cat sleeper / groomer / knocker ────────────────── */
+.cat-sleeper, .cat-groomer {
+    position: fixed;
+    z-index: 3;
+    pointer-events: none;
+    filter: drop-shadow(0 6px 14px rgba(190, 24, 93, 0.18));
+}
+.cat-knocker {
+    position: fixed;
+    z-index: 4;
+    pointer-events: none;
+    filter: drop-shadow(0 6px 14px rgba(190, 24, 93, 0.20));
+}
+.cat-sleeper .cat-breath {
+    animation: catBreathe 3.4s ease-in-out infinite;
+    transform-origin: 50% 60%;
+}
+@keyframes catBreathe {
+    0%, 100% { transform: scale(1, 1); }
+    50%      { transform: scale(1.025, 1.05); }
+}
+
+/* ── Mouse element ──────────────────────────────────── */
+.cat-mouse {
+    position: fixed;
+    z-index: 3;
+    pointer-events: none;
+    width: 36px;
+    height: 22px;
+    animation: catMouseRun var(--mouse-duration, 5s) linear forwards;
+    filter: drop-shadow(0 2px 3px rgba(60, 60, 60, 0.3));
+}
+@keyframes catMouseRun {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(calc(100vw + 80px)); }
+}
+
+/* ── Knock-off shake ────────────────────────────────── */
+@keyframes catShake {
+    0%, 100% { transform: translate(0, 0) rotate(0); }
+    20%      { transform: translate(-4px, 1px) rotate(-1deg); }
+    40%      { transform: translate(5px, -1px) rotate(1.4deg); }
+    60%      { transform: translate(-3px, 0) rotate(-0.8deg); }
+    80%      { transform: translate(2px, 1px) rotate(0.6deg); }
+}
+.cat-shake { animation: catShake 0.7s ease-in-out 2; }
+
+/* ── Speech bubble ──────────────────────────────────── */
+.cat-bubble {
+    position: absolute;
+    top: -22px;
+    right: -14px;
+    background: #FFFFFF;
+    color: #BE185D;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 10px;
+    border: 1.5px solid #F472B6;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(190, 24, 93, 0.20);
+    animation: catBubblePop 1.6s ease-out forwards;
+    pointer-events: none;
+    z-index: 6;
+}
+.cat-bubble.cat-bubble-left {
+    right: auto;
+    left: -14px;
+}
+@keyframes catBubblePop {
+    0%   { opacity: 0; transform: scale(0.6) translateY(6px); }
+    18%  { opacity: 1; transform: scale(1.08) translateY(-4px); }
+    34%  { transform: scale(1) translateY(0); }
+    70%  { opacity: 1; }
+    100% { opacity: 0; transform: scale(1) translateY(-2px); }
+}
+
+/* ── Sidewalk strollers ─────────────────────────────── */
+.cat-sidewalk {
+    position: fixed;
+    width: 80px;
+    height: 64px;
+    z-index: 1;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+    filter: drop-shadow(0 4px 10px rgba(190, 24, 93, 0.18));
+    animation: catSidewalkPace var(--pace-duration, 18s) ease-in-out infinite alternate;
+    animation-delay: var(--pace-delay, 0s);
+}
+.cat-sidewalk--left  { left: 14px; }
+.cat-sidewalk--right { right: 14px; }
+@keyframes catSidewalkPace {
+    0%   { top: 14%; }
+    32%  { top: 38%; }
+    38%  { top: 38%; }
+    64%  { top: 60%; }
+    70%  { top: 60%; }
+    100% { top: 84%; }
+}
+@media (max-width: 1280px) {
+    .cat-sidewalk { display: none !important; }
+}
+
+/* ── Corner tail on KPI cards ───────────────────────── */
+html[data-theme="cat"] .cat-corner-tail {
+    position: absolute;
+    top: -16px;
+    right: -10px;
+    width: 22px;
+    height: 40px;
+    pointer-events: none;
+    transform-origin: 50% 100%;
+    animation: catCornerTailWag 1.4s ease-in-out infinite alternate;
+    animation-delay: var(--tail-delay, 0s);
+    z-index: 5;
+}
+html[data-theme="cat"] .cat-corner-tail svg { width: 100%; height: 100%; display: block; }
+@keyframes catCornerTailWag {
+    0%   { transform: rotate(-12deg); }
+    100% { transform: rotate(18deg); }
+}
+
+/* ── Whiskers around search field ──────────────────── */
+html[data-theme="cat"] .cat-search-whiskers {
+    position: absolute;
+    top: 50%;
+    pointer-events: none;
+    opacity: 0.6;
+    z-index: 4;
+}
+html[data-theme="cat"] .cat-search-whiskers--l {
+    left: -34px;
+    transform: translateY(-50%);
+}
+html[data-theme="cat"] .cat-search-whiskers--r {
+    right: -34px;
+    transform: translateY(-50%) scaleX(-1);
+}
+html[data-theme="cat"] .cat-search-whiskers svg path {
+    animation: catWhiskerFlick 5.5s ease-in-out infinite;
+    transform-origin: 0 50%;
+}
+@keyframes catWhiskerFlick {
+    0%, 92%, 100% { transform: rotate(0deg); }
+    94%  { transform: rotate(-3deg); }
+    97%  { transform: rotate(2deg); }
+}
+
+/* ── Reduced motion ─────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    .cat-runner,
+    .cat-runner-inner,
+    .cat-leg,
+    .cat-tail,
+    .cat-paw,
+    .cat-sidewalk,
+    .cat-corner-tail,
+    .cat-mouse,
+    .cat-bubble,
+    .cat-sleeper .cat-breath,
+    .cat-search-whiskers svg path,
+    .cat-shake,
+    .mode-trigger-btn[aria-pressed="true"] {
+        animation: none !important;
+        transition: none !important;
+    }
+}
